@@ -74,6 +74,39 @@ export function fmtDate(value: string | null): string {
   });
 }
 
+/** Parse a SQLite `YYYY-MM-DD HH:MM:SS` (UTC) or ISO timestamp. */
+export function parseTimestamp(value: string): Date {
+  const iso = value.includes("T") ? value : value.replace(" ", "T") + "Z";
+  return new Date(iso);
+}
+
+/**
+ * Human-friendly elapsed time: "just now", "5 minutes ago", "3 days ago".
+ * Falls back to an absolute date beyond a month, where "37 days ago" stops
+ * being easier to read than the date itself.
+ */
+export function fmtRelative(value: string | null, now: Date = new Date()): string {
+  if (!value) return "—";
+  const d = parseTimestamp(value);
+  if (isNaN(d.getTime())) return value;
+
+  const seconds = Math.round((now.getTime() - d.getTime()) / 1000);
+  if (seconds < 0) return fmtDate(value); // clock skew — don't say "in -3 days"
+  if (seconds < 45) return "just now";
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return plural(minutes, "minute");
+  const hours = Math.round(seconds / 3600);
+  if (hours < 24) return plural(hours, "hour");
+  const days = Math.round(seconds / 86400);
+  if (days <= 30) return plural(days, "day");
+  return fmtDate(value);
+}
+
+function plural(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+}
+
 export function fmtDateTime(value: string | null): string {
   if (!value) return "—";
   const iso = value.includes("T") ? value : value.replace(" ", "T") + "Z";

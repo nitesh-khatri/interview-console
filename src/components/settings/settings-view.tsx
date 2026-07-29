@@ -142,7 +142,10 @@ function ListEditor({
   const [items, setItems] = useState<string[]>(initial);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
-  const dirty = JSON.stringify(items) !== JSON.stringify(initial);
+  // Compare against what's actually persisted, not the `initial` prop — that
+  // prop doesn't change after a save, so the Save button would never clear.
+  const [saved, setSaved] = useState<string[]>(initial);
+  const dirty = JSON.stringify(items) !== JSON.stringify(saved);
 
   function add() {
     const v = draft.trim();
@@ -166,6 +169,7 @@ function ListEditor({
         method: "PUT",
         body: JSON.stringify({ [settingKey]: items }),
       });
+      setSaved(items);
       toast.success(`${title} saved`);
     } catch (err) {
       toast.error((err as Error).message);
