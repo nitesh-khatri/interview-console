@@ -1,22 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { fmtRelative } from "@/lib/client";
-import { RelativeTime } from "@/components/relative-time";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 /**
  * Ticket #3 — Relative timestamps with an exact date on hover
  *
- * Remove `.skip` below and make these pass.
+ * Remove `.skip` from `describe.skip` below, then make these pass.
  *
  * You need:
- *   - `fmtRelative(value, now?)` exported from src/lib/client.ts
- *   - a `RelativeTime` component at src/components/relative-time.tsx rendering
- *     an element with data-testid="relative-time"
+ *   - `fmtRelative(value, now?)` exported from `src/lib/client.ts`
+ *   - `src/components/relative-time.tsx` exporting `<RelativeTime value={...} />`
+ *     which renders an element with data-testid="relative-time"
  *
- * Note `fmtRelative` takes an optional `now` — that's what makes it testable
- * without the result changing depending on when the suite runs.
+ * `fmtRelative` takes an optional `now` so tests give the same answer whenever
+ * they run — a function that reads the clock internally is very hard to test.
  */
+let fmtRelative: typeof import("@/lib/client").fmtRelative;
+let RelativeTime: typeof import("@/components/relative-time").RelativeTime;
+
 const NOW = new Date("2026-03-15T12:00:00Z");
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
 
@@ -26,6 +27,11 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 describe("ticket 3 — relative timestamps", () => {
+  beforeAll(async () => {
+    ({ fmtRelative } = await import("@/lib/client"));
+    ({ RelativeTime } = await import("@/components/relative-time"));
+  });
+
   describe("fmtRelative", () => {
     it("shows a dash for a missing value", () => {
       expect(fmtRelative(null, NOW)).toBe("—");
@@ -64,8 +70,8 @@ describe("ticket 3 — relative timestamps", () => {
   });
 
   describe("<RelativeTime />", () => {
-    // The component renders against the real clock, so build these timestamps
-    // relative to now rather than the fixed NOW used above.
+    // The component renders against the real clock, so build these relative to
+    // now rather than the fixed NOW above.
     const recently = () => new Date(Date.now() - 2 * DAY).toISOString();
 
     it("renders the relative text", () => {

@@ -10,7 +10,11 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],
+    // Per-ticket tests are excluded here because a ticket you haven't started
+    // yet imports files that don't exist, which would fail the whole run.
+    // Run those with `npm run test:ticket <number>` instead.
     include: ["tests/**/*.test.{ts,tsx}"],
+    exclude: ["tests/tickets/**", "node_modules/**"],
     css: false,
   },
 });

@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ticket": "vitest run --config vitest.tickets.config.ts",
+    "test:tickets": "vitest run --config vitest.tickets.config.ts",
     "admin": "node scripts/admin.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "setup": "bash scripts/server-setup.sh"
