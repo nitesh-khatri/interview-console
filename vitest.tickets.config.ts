@@ -17,5 +17,12 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/tickets/**/*.test.{ts,tsx}"],
     css: false,
+    // These are heavy integration tests — several render the whole interview
+    // console and drive it with userEvent. Running every file in parallel
+    // starves the workers and userEvent's waitFor calls time out, so the suite
+    // flakes even though each file passes on its own. One worker at a time
+    // keeps it deterministic; a generous timeout covers the slowest render.
+    fileParallelism: false,
+    testTimeout: 15000,
   },
 });

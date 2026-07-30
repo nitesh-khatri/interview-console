@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   ChevronLeft,
   ChevronRight,
+  GitCompareArrows,
 } from "lucide-react";
 import type { CandidateSummary } from "@/lib/pipeline";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -534,6 +535,14 @@ export function CandidatesView({
               <span className="text-xs text-muted-foreground">
                 {hiddenSelectedCount} more hidden by this filter — not included
               </span>
+            )}
+            {selectedVisible.length >= 2 && selectedVisible.length <= 3 && (
+              <Button size="sm" variant="outline" asChild data-testid="compare-button">
+                <Link href={`/candidates/compare?ids=${selectedVisible.join(",")}`}>
+                  <GitCompareArrows className="h-4 w-4" />
+                  Compare
+                </Link>
+              </Button>
             )}
             <Button size="sm" onClick={() => setShareOpen(true)}>
               <Link2 className="h-4 w-4" />

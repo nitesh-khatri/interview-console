@@ -104,3 +104,90 @@ export function getPipelineStats(): PipelineStats {
     rounds_pending: r.rounds_pending ?? 0,
   };
 }
+
+export interface ComparisonCandidate {
+  id: number;
+  name: string;
+  applied_role: string | null;
+  current_company: string | null;
+  status: CandidateStatus;
+  /** Average of completed rounds' question averages, or null. */
+  score: number | null;
+  /** The most recent completed round's recommendation. */
+  recommendation: Recommendation | null;
+  /** Average score per rating criterion, across the candidate's rounds. */
+  ratings: Record<string, number>;
+}
+
+/**
+ * Side-by-side comparison data for 2–3 candidates (ticket #17). One pass per
+ * concern rather than per candidate, so it stays a handful of queries.
+ */
+export function getComparison(ids: number[]): ComparisonCandidate[] {
+  const db = getDb();
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => "?").join(",");
+
+  const candidates = db
+    .prepare(
+      `SELECT id, name, applied_role, current_company, status
+       FROM candidates WHERE id IN (${placeholders})`
+    )
+    .all(...ids) as Array<{
+    id: number;
+    name: string;
+    applied_role: string | null;
+    current_company: string | null;
+    status: CandidateStatus;
+  }>;
+
+  const summaries = getCandidateSummaries();
+  const byId = new Map(summaries.map((c) => [c.id, c]));
+
+  const ratingRows = db
+    .prepare(
+      `SELECT r.candidate_id AS cid, rr.param_name AS param, AVG(rr.score) AS avg
+       FROM round_ratings rr JOIN rounds r ON r.id = rr.round_id
+       WHERE r.candidate_id IN (${placeholders}) AND rr.score IS NOT NULL
+       GROUP BY r.candidate_id, rr.param_name`
+    )
+    .all(...ids) as Array<{ cid: number; param: string; avg: number }>;
+
+  const ratingsByCandidate = new Map<number, Record<string, number>>();
+  for (const row of ratingRows) {
+    const map = ratingsByCandidate.get(row.cid) ?? {};
+    map[row.param] = Math.round(row.avg * 10) / 10;
+    ratingsByCandidate.set(row.cid, map);
+  }
+
+  // Preserve the order the ids were requested in.
+  return ids
+    .map((id) => candidates.find((c) => c.id === id))
+    .filter((c): c is NonNullable<typeof c> => c !== undefined)
+    .map((c) => {
+      const summary = byId.get(c.id);
+      const completed =
+        summary?.rounds.filter(
+          (r) => r.status === "completed" && r.question_avg != null
+        ) ?? [];
+      const score =
+        completed.length > 0
+          ? Math.round(
+              (completed.reduce((s, r) => s + (r.question_avg ?? 0), 0) /
+                completed.length) *
+                10
+            ) / 10
+          : null;
+      const recommendation = completed.at(-1)?.recommendation ?? null;
+      return {
+        id: c.id,
+        name: c.name,
+        applied_role: c.applied_role,
+        current_company: c.current_company,
+        status: c.status,
+        score,
+        recommendation,
+        ratings: ratingsByCandidate.get(c.id) ?? {},
+      };
+    });
+}
