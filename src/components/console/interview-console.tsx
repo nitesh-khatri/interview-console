@@ -137,6 +137,9 @@ export function InterviewConsole({
   // Confirmations for irreversible actions (ticket #23).
   const [confirmDelete, setConfirmDelete] = useState<RoundQuestion | null>(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
+  // Mobile: the question bank is hidden below md, so a bottom sheet is the only
+  // way to reach it on a phone (ticket #20).
+  const [mobileBankOpen, setMobileBankOpen] = useState(false);
   const { width: panelWidth, onMouseDown: onResize, dragging } = useResizable(
     "ic-console-panel-width",
     380
@@ -722,19 +725,75 @@ export function InterviewConsole({
           <RailButton
             label="Scoring"
             active={panel === "scoring"}
-            onClick={() => setPanel(panel === "scoring" ? null : "scoring")}
+            onClick={() => {
+              setMobileBankOpen(false); // one sheet at a time
+              setPanel(panel === "scoring" ? null : "scoring");
+            }}
           >
             <ClipboardList className="h-5 w-5" />
           </RailButton>
           <RailButton
             label="Candidate"
             active={panel === "info"}
-            onClick={() => setPanel(panel === "info" ? null : "info")}
+            onClick={() => {
+              setMobileBankOpen(false);
+              setPanel(panel === "info" ? null : "info");
+            }}
           >
             <UserRound className="h-5 w-5" />
           </RailButton>
         </div>
       </div>
+
+      {/* Mobile-only trigger for the question bank (ticket #20). Below md the
+          split panel is display:none, so without this there is no way to add a
+          question on a phone. Placed bottom-left, clear of the notes fields and
+          the Complete button in the header. */}
+      {!readOnly && (
+        <Button
+          size="sm"
+          data-testid="mobile-bank-trigger"
+          onClick={() => {
+            setPanel(null); // one sheet at a time
+            setMobileBankOpen(true);
+          }}
+          className="fixed bottom-4 left-4 z-30 shadow-lg md:hidden"
+        >
+          <Plus className="h-4 w-4" />
+          Question bank
+        </Button>
+      )}
+
+      {/* Mobile question-bank bottom sheet */}
+      <Sheet open={mobileBankOpen} onOpenChange={setMobileBankOpen}>
+        <SheetContent
+          side="bottom"
+          data-testid="mobile-bank-sheet"
+          className="h-[80dvh] gap-0 overflow-hidden p-0"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Question bank</SheetTitle>
+          </SheetHeader>
+          <div className="h-full overflow-y-auto">
+            <QuestionBankPanel
+              banks={banks.map((b) => ({ id: b.id, name: b.name }))}
+              bankQuestions={bankQuestions}
+              askedIds={askedIds}
+              favoriteIds={favoriteIds}
+              recentIds={recentIds}
+              onAsk={(q) => {
+                addQuestion(q);
+                setMobileBankOpen(false); // see it land in the list
+              }}
+              onAskAdhoc={() => {
+                setMobileBankOpen(false);
+                setAdhocOpen(true);
+              }}
+              readOnly={readOnly}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Slide-in panels */}
       <Sheet open={panel !== null} onOpenChange={(o) => !o && setPanel(null)}>
