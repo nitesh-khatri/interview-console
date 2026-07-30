@@ -58,7 +58,7 @@ describe("ticket 13 — optimistic updates roll back", () => {
 
   /** The score buttons for one asked question, in order 0–5. */
   const scoreButtons = (id: number) =>
-    within(card(id)).getAllByRole("button", { name: /^Score [0-5]$/ });
+    within(card(id)).getAllByRole("radio", { name: /^Score [0-5]$/ });
 
   /** Which score is currently marked as chosen, or null if unscored. */
   const chosenScore = (id: number) => {
@@ -246,7 +246,7 @@ describe("ticket 13 — optimistic updates roll back", () => {
         screen.getByText("Attitude").closest(".space-y-1\\.5") ??
         screen.getByText("Attitude").parentElement!.parentElement!;
       const buttons = () =>
-        within(row() as HTMLElement).getAllByRole("button", {
+        within(row() as HTMLElement).getAllByRole("radio", {
           name: /^Score [0-5]$/,
         });
 

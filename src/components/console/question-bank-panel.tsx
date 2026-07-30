@@ -195,6 +195,7 @@ export function QuestionBankPanel({
               <button
                 key={d}
                 onClick={() => setDifficulty(d)}
+                aria-pressed={difficulty === d}
                 className={cn(
                   "flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors",
                   difficulty === d

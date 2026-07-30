@@ -55,8 +55,8 @@ describe("ticket 11 — keyboard shortcuts", () => {
   const chosenScore = (id: number) => {
     const card = screen.getByTestId(`asked-question-${id}`);
     const pressed = within(card)
-      .getAllByRole("button", { name: /^Score [0-5]$/ })
-      .find((b) => b.getAttribute("aria-pressed") === "true");
+      .getAllByRole("radio", { name: /^Score [0-5]$/ })
+      .find((b) => b.getAttribute("aria-checked") === "true");
     return pressed?.textContent?.trim() ?? null;
   };
 

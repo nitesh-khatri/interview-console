@@ -164,13 +164,17 @@ export function AddCandidateDialog({
                 </button>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/50">
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/50 focus-within:ring-2 focus-within:ring-ring">
                 <Upload className="h-4 w-4" />
                 Choose file
+                {/* sr-only, not display:none, so the input stays in the tab
+                    order; focus-within rings the label so keyboard users can
+                    see and reach it (ticket #21). */}
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx"
-                  className="hidden"
+                  aria-label="Resume file (PDF, DOC or DOCX)"
+                  className="sr-only"
                   onChange={(e) => setResume(e.target.files?.[0] ?? null)}
                 />
               </label>

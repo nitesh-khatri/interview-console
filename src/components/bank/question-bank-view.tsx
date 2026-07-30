@@ -308,6 +308,7 @@ export function QuestionBankView({
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
+                                  aria-label={`Edit question: ${q.question.slice(0, 40)}`}
                                   onClick={() => openForm(q)}
                                 >
                                   <Pencil className="h-4 w-4" />
@@ -316,6 +317,7 @@ export function QuestionBankView({
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  aria-label={`Delete question: ${q.question.slice(0, 40)}`}
                                   onClick={() => setDeleteQ(q)}
                                 >
                                   <Trash2 className="h-4 w-4" />
