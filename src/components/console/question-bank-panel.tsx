@@ -14,7 +14,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DifficultyBadge, TypeBadge } from "@/components/badges";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { Highlight } from "@/components/highlight";
 import { cn } from "@/lib/utils";
+
+/** Shared empty set, so the "nothing collapsed" case keeps a stable identity. */
+const EMPTY_CATS: ReadonlySet<string> = new Set();
 
 type BankQuestion = Question & { bank_name: string };
 
@@ -35,12 +40,28 @@ export function QuestionBankPanel({
   onAskAdhoc: () => void;
   readOnly: boolean;
 }) {
-  const [query, setQuery] = useState("");
+  const [queryInput, setQueryInput] = useState("");
+  const query = useDebouncedValue(queryInput, 250);
   const [activeBank, setActiveBank] = useState<number | "all">("all");
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [qtype, setQtype] = useState<QuestionType | "all">("all");
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  /**
+   * Categories the user collapsed *while searching*, tagged with the query they
+   * collapsed under. A search opens every matching category, but the user can
+   * still shut one and have that stick — and because the tag is compared
+   * against the live query, a new search starts fresh without an effect
+   * syncing anything.
+   */
+  const [searchCollapse, setSearchCollapse] = useState<{
+    query: string;
+    cats: Set<string>;
+  }>({ query: "", cats: new Set() });
+
+  const searching = query.trim().length > 0;
+  const collapsedWhileSearching =
+    searchCollapse.query === query ? searchCollapse.cats : EMPTY_CATS;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -69,7 +90,21 @@ export function QuestionBankPanel({
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
 
+  /** Search reveals matches; without a search the user's own choice applies. */
+  function isCatOpen(cat: string) {
+    return searching ? !collapsedWhileSearching.has(cat) : openCats.has(cat);
+  }
+
   function toggleCat(cat: string) {
+    if (searching) {
+      setSearchCollapse((prev) => {
+        const cats = new Set(prev.query === query ? prev.cats : []);
+        if (cats.has(cat)) cats.delete(cat);
+        else cats.add(cat);
+        return { query, cats };
+      });
+      return;
+    }
     setOpenCats((prev) => {
       const next = new Set(prev);
       if (next.has(cat)) next.delete(cat);
@@ -93,10 +128,11 @@ export function QuestionBankPanel({
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
             placeholder="Search questions…"
             className="h-9 pl-8"
+            data-testid="search-input"
           />
         </div>
         {/* Compact filter row: bank + type dropdowns, difficulty segmented */}
@@ -158,7 +194,7 @@ export function QuestionBankPanel({
                 setActiveBank("all");
                 setQtype("all");
                 setDifficulty("all");
-                setQuery("");
+                setQueryInput("");
               }}
               className="flex h-8 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
               title="Clear filters"
@@ -172,12 +208,14 @@ export function QuestionBankPanel({
       <div className="flex-1 overflow-y-auto">
         {byCategory.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted-foreground">
-            No questions match your filters.
+            {searching
+              ? `Nothing matches “${query.trim()}”.`
+              : "No questions match your filters."}
           </p>
         ) : (
           <div className="divide-y">
             {byCategory.map(([cat, items]) => {
-              const open = openCats.has(cat);
+              const open = isCatOpen(cat);
               return (
                 <div key={cat}>
                   <button
@@ -219,7 +257,7 @@ export function QuestionBankPanel({
                                   )}
                                 </div>
                                 <p className="mt-1.5 text-sm leading-snug">
-                                  {item.question}
+                                  <Highlight text={item.question} query={query} />
                                 </p>
                                 {(item.answer_hints || item.follow_ups) && (
                                   <button

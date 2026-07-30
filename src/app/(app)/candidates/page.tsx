@@ -6,10 +6,6 @@ export default async function CandidatesPage() {
   const user = (await getCurrentUser())!;
   const candidates = getCandidateSummaries();
   return (
-    <CandidatesView
-      candidates={candidates}
-      currentUserId={user.id}
-      role={user.role}
-    />
+    <CandidatesView candidates={candidates} currentUserId={user.id} />
   );
 }

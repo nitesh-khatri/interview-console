@@ -30,7 +30,12 @@ import {
 import { DifficultyBadge, TypeBadge } from "@/components/badges";
 import { QuestionFormDialog } from "@/components/bank/question-form-dialog";
 import { ImportDialog } from "@/components/bank/import-dialog";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { Highlight } from "@/components/highlight";
 import { cn } from "@/lib/utils";
+
+/** Shared empty set, so the "nothing collapsed" case keeps a stable identity. */
+const EMPTY_CATS: ReadonlySet<string> = new Set();
 
 const DIFF_ORDER: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
 
@@ -43,8 +48,19 @@ export function QuestionBankView({
 }) {
   const router = useRouter();
   const [activeBankId, setActiveBankId] = useState<number>(banks[0]?.id ?? 0);
-  const [query, setQuery] = useState("");
+  const [queryInput, setQueryInput] = useState("");
+  const query = useDebouncedValue(queryInput, 250);
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
+  /**
+   * Categories the user collapsed *while searching*, tagged with the query they
+   * collapsed under. A search opens every matching category, but collapsing one
+   * still sticks — and comparing the tag against the live query means a new
+   * search starts fresh without an effect to keep anything in sync.
+   */
+  const [searchCollapse, setSearchCollapse] = useState<{
+    query: string;
+    cats: Set<string>;
+  }>({ query: "", cats: new Set() });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Question | null>(null);
   // Bumped on every open so the dialog remounts with fresh field state.
@@ -61,7 +77,12 @@ export function QuestionBankView({
   const [deleteQ, setDeleteQ] = useState<Question | null>(null);
 
   const activeBank = banks.find((b) => b.id === activeBankId) ?? banks[0];
-  const questions = questionsByBank[activeBankId] ?? [];
+  // Memoised because the `?? []` fallback would otherwise be a fresh array on
+  // every render, invalidating every useMemo downstream that depends on it.
+  const questions = useMemo(
+    () => questionsByBank[activeBankId] ?? [],
+    [questionsByBank, activeBankId]
+  );
 
   const categories = useMemo(
     () => [...new Set(questions.map((q) => q.category))].sort(),
@@ -89,7 +110,25 @@ export function QuestionBankView({
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [questions, query]);
 
+  const searching = query.trim().length > 0;
+  const collapsedWhileSearching =
+    searchCollapse.query === query ? searchCollapse.cats : EMPTY_CATS;
+
+  /** Search reveals matches; without a search the user's own choice applies. */
+  function isCatOpen(cat: string) {
+    return searching ? !collapsedWhileSearching.has(cat) : openCats.has(cat);
+  }
+
   function toggleCat(cat: string) {
+    if (searching) {
+      setSearchCollapse((prev) => {
+        const cats = new Set(prev.query === query ? prev.cats : []);
+        if (cats.has(cat)) cats.delete(cat);
+        else cats.add(cat);
+        return { query, cats };
+      });
+      return;
+    }
     setOpenCats((prev) => {
       const n = new Set(prev);
       if (n.has(cat)) n.delete(cat);
@@ -206,10 +245,12 @@ export function QuestionBankView({
           <div className="relative mb-3 max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
               placeholder="Search questions…"
               className="pl-8"
+              data-testid="search-input"
+              aria-label="Search questions"
             />
           </div>
 
@@ -217,12 +258,12 @@ export function QuestionBankView({
             <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
               {questions.length === 0
                 ? "This bank has no questions yet. Add one or import a file."
-                : "No questions match your search."}
+                : `Nothing matches “${query.trim()}”.`}
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border bg-card">
               {byCategory.map(([cat, items], idx) => {
-                const open = openCats.has(cat);
+                const open = isCatOpen(cat);
                 return (
                   <div key={cat} className={idx > 0 ? "border-t" : ""}>
                     <button
@@ -252,7 +293,9 @@ export function QuestionBankView({
                                   <DifficultyBadge difficulty={q.difficulty} />
                                   <TypeBadge qtype={q.qtype} />
                                 </div>
-                                <p className="mt-1.5 text-sm">{q.question}</p>
+                                <p className="mt-1.5 text-sm">
+                                  <Highlight text={q.question} query={query} />
+                                </p>
                                 {q.answer_hints && (
                                   <p className="mt-1.5 rounded bg-muted/60 p-2 text-xs text-muted-foreground">
                                     <span className="font-medium">Hints: </span>
