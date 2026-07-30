@@ -1,7 +1,8 @@
 # Contributing
 
-How to pick up a ticket and get it merged. Read [SETUP.md](./SETUP.md) first if
-the app isn't running yet.
+How to pick up a ticket and get it merged. New here? Read [SETUP.md](./SETUP.md)
+to get running and [docs/ROADMAP.md](./docs/ROADMAP.md) to see which ticket to pick
+first — this page is just the mechanical loop.
 
 ---
 

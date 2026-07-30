@@ -38,6 +38,15 @@ file and uploaded resumes on disk.
 - **6 themes**: 2 light (Daylight, Latte) and 4 dark (Graphite, Midnight,
   Forest, Amoled), per-device with an org-wide default.
 
+## New contributor? Start here
+
+This repo doubles as a structured frontend training project. If you've been handed
+it to work through:
+
+1. [SETUP.md](./SETUP.md) — get it running (Windows-first).
+2. [docs/ROADMAP.md](./docs/ROADMAP.md) — **which ticket to pick, and in what order.**
+3. [CONTRIBUTING.md](./CONTRIBUTING.md) — the branch → test → PR loop.
+
 ## Local development
 
 Requires **Node.js 20+**.
