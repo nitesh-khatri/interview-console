@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { RoundRating, Recommendation } from "@/lib/types";
 import { RECOMMENDATIONS } from "@/lib/types";
@@ -153,11 +153,9 @@ function RatingRow({
   onSetNote: (param: string, note: string) => void;
   onRemoveParam: (param: string) => void;
 }) {
+  // The caller keys this component by `rating.id`, so a different rating
+  // remounts it and this initializer runs again. No sync effect needed.
   const [note, setNote] = useState(rating.note ?? "");
-  // Keep local note in sync if the rating changes identity (e.g. round switch).
-  useEffect(() => {
-    setNote(rating.note ?? "");
-  }, [rating.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-1.5 rounded-lg border p-2.5">

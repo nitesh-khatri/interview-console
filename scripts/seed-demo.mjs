@@ -251,12 +251,9 @@ const RATING_NOTES = {
   "Fundamental Knowledge": ["Solid grasp of the underlying model, not just the API.", "Knows the framework well; shakier on the platform beneath it."],
 };
 
-const insertRound = db.prepare(
-  `INSERT INTO rounds
-     (candidate_id, round_number, title, interviewer_id, status, recommendation,
-      overall_notes, created_by, created_at, started_at, completed_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?, ?)`
-);
+// Rounds are inserted inside makeRound() rather than from a shared prepared
+// statement, because their timestamps are SQLite datetime() expressions that
+// have to be interpolated into the SQL.
 const insertRoundQuestion = db.prepare(
   `INSERT INTO round_questions
      (round_id, question_id, question_text, category, difficulty, qtype, score, notes, sort_order)
@@ -278,9 +275,20 @@ const interviewers = [ids.alex, ids.sam, ids.jordan];
  * recommending "strong no". Aggregations built on this data then look sane.
  */
 function makeRound(candidateId, roundNumber, title, interviewerId, status, seed, outcome) {
+  // Interviews run under an hour, so these timestamps sit minutes apart, not
+  // days. An in-progress round has to have started recently or the live timer
+  // in the console reads as thousands of minutes.
+  const durationMins = 45 + (seed % 4) * 8; // 45–69 min
   const started =
-    status === "pending" ? null : `datetime('now', '-${seed + 1} days')`;
-  const completed = status === "completed" ? `datetime('now', '-${seed} days')` : null;
+    status === "pending"
+      ? null
+      : status === "in_progress"
+        ? `datetime('now', '-${18 + (seed % 5) * 7} minutes')` // 18–46 min ago
+        : `datetime('now', '-${seed + 1} days')`;
+  const completed =
+    status === "completed"
+      ? `datetime('now', '-${seed + 1} days', '+${durationMins} minutes')`
+      : null;
 
   const positive = outcome === "selected";
   const negative = outcome === "rejected";

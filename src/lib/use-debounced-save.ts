@@ -23,8 +23,14 @@ export interface DebouncedSave {
 export function useDebouncedSave(save: SaveFn, delay = 600): DebouncedSave {
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const latest = useRef<Map<string, unknown>>(new Map());
+  // `save` is usually an inline arrow, so it changes every render. Keeping the
+  // latest one in a ref lets `trigger`/`flush` stay stable without going stale.
+  // The write happens in an effect, not during render — refs must not be
+  // mutated while rendering.
   const saveRef = useRef(save);
-  saveRef.current = save;
+  useEffect(() => {
+    saveRef.current = save;
+  });
 
   const trigger = useCallback(
     (key: string, value: unknown) => {
