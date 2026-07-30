@@ -33,6 +33,7 @@ import {
 import { ThemeMenu } from "@/components/theme-menu";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CommandPalette } from "@/components/command-palette";
 
 interface NavItem {
   href: string;
@@ -42,9 +43,11 @@ interface NavItem {
 
 export function AppShell({
   user,
+  candidates = [],
   children,
 }: {
   user: SessionUser;
+  candidates?: { id: number; name: string }[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -79,6 +82,10 @@ export function AppShell({
 
   return (
     <TooltipProvider delayDuration={300}>
+      <CommandPalette
+        candidates={candidates}
+        canEditBank={canEditQuestionBank(user.role)}
+      />
       <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 border-b bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/80">
         <div className="flex h-14 items-center gap-2 px-4">

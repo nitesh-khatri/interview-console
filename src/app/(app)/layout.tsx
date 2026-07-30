@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { listCandidates } from "@/lib/queries";
 import { AppShell } from "@/components/app-shell";
 
 export default async function AppLayout({
@@ -9,6 +10,9 @@ export default async function AppLayout({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  // A light list for the ⌘K command palette (ticket #22).
+  const candidates = listCandidates().map((c) => ({ id: c.id, name: c.name }));
 
   return (
     <AppShell
@@ -20,6 +24,7 @@ export default async function AppLayout({
         department: user.department,
         must_change_password: user.must_change_password,
       }}
+      candidates={candidates}
     >
       {children}
     </AppShell>
