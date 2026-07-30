@@ -57,6 +57,7 @@ import { ArrowRightCircle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useRecentQuestions } from "@/lib/use-recent-questions";
+import { TemplatesMenu } from "@/components/console/templates-menu";
 
 type BankQuestion = Question & { bank_name: string };
 
@@ -262,6 +263,23 @@ export function InterviewConsole({
     },
     [round.id, recordRecent]
   );
+
+  /**
+   * Apply a template's questions (ticket #19): add the ones not already in the
+   * round, in template order, and report how many were new. Reuses addQuestion,
+   * which de-duplicates server-side too.
+   */
+  function applyTemplateQuestions(questionIds: number[]): number {
+    const present = new Set(
+      asked.filter((a) => a.question_id).map((a) => a.question_id)
+    );
+    const toAdd = questionIds.filter((id) => !present.has(id));
+    for (const id of toAdd) {
+      const q = bankQuestions.find((b) => b.id === id);
+      if (q) addQuestion(q);
+    }
+    return toAdd.length;
+  }
 
   async function addAdhoc() {
     const text = adhocText.trim();
@@ -672,14 +690,23 @@ export function InterviewConsole({
                 Questions asked ({asked.length})
               </h2>
               {!readOnly && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAdhocOpen(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Ad-hoc question
-                </Button>
+                <div className="flex items-center gap-1">
+                  <TemplatesMenu
+                    askedQuestionIds={asked
+                      .filter((a) => a.question_id)
+                      .map((a) => a.question_id!)}
+                    hasAdhoc={asked.some((a) => !a.question_id)}
+                    onApply={applyTemplateQuestions}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAdhocOpen(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Ad-hoc question
+                  </Button>
+                </div>
               )}
             </div>
 
