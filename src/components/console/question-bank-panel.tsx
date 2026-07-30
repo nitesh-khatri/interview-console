@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Plus, Check, ChevronDown, X } from "lucide-react";
+import { Search, Plus, Check, ChevronDown, X, Star } from "lucide-react";
 import type { Question, Difficulty, QuestionType } from "@/lib/types";
 import { DIFFICULTIES, QUESTION_TYPES } from "@/lib/types";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DifficultyBadge, TypeBadge } from "@/components/badges";
+import { FavoriteStar } from "@/components/bank/favorite-star";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Highlight } from "@/components/highlight";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,8 @@ export function QuestionBankPanel({
   banks,
   bankQuestions,
   askedIds,
+  favoriteIds = [],
+  recentIds = [],
   onAsk,
   onAskAdhoc,
   readOnly,
@@ -36,6 +39,8 @@ export function QuestionBankPanel({
   banks: { id: number; name: string }[];
   bankQuestions: BankQuestion[];
   askedIds: Set<number>;
+  favoriteIds?: number[];
+  recentIds?: number[];
   onAsk: (q: BankQuestion) => void;
   onAskAdhoc: () => void;
   readOnly: boolean;
@@ -45,6 +50,18 @@ export function QuestionBankPanel({
   const [activeBank, setActiveBank] = useState<number | "all">("all");
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
   const [qtype, setQtype] = useState<QuestionType | "all">("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const favorites = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
+  // The last few questions this interviewer asked, most-recent first, that are
+  // still in the bank. Rendered as a shortcut section above the categories.
+  const recentQuestions = useMemo(() => {
+    const byId = new Map(bankQuestions.map((q) => [q.id, q]));
+    return recentIds
+      .map((id) => byId.get(id))
+      .filter((q): q is BankQuestion => q !== undefined)
+      .slice(0, 5);
+  }, [recentIds, bankQuestions]);
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   /**
@@ -66,6 +83,7 @@ export function QuestionBankPanel({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return bankQuestions.filter((item) => {
+      if (favoritesOnly && !favorites.has(item.id)) return false;
       if (activeBank !== "all" && item.bank_id !== activeBank) return false;
       if (difficulty !== "all" && item.difficulty !== difficulty) return false;
       if (qtype !== "all" && item.qtype !== qtype) return false;
@@ -73,7 +91,7 @@ export function QuestionBankPanel({
           !item.category.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [bankQuestions, query, activeBank, difficulty, qtype]);
+  }, [bankQuestions, query, activeBank, difficulty, qtype, favoritesOnly, favorites]);
 
   const byCategory = useMemo(() => {
     const map = new Map<string, BankQuestion[]>();
@@ -188,12 +206,31 @@ export function QuestionBankPanel({
               </button>
             ))}
           </div>
-          {(activeBank !== "all" || qtype !== "all" || difficulty !== "all" || query) && (
+          <button
+            type="button"
+            onClick={() => setFavoritesOnly((v) => !v)}
+            aria-pressed={favoritesOnly}
+            title="Show only starred questions"
+            className={cn(
+              "flex h-8 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors",
+              favoritesOnly
+                ? "border-warning bg-warning/10 text-warning"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Star className={cn("h-3.5 w-3.5", favoritesOnly && "fill-current")} />
+          </button>
+          {(activeBank !== "all" ||
+            qtype !== "all" ||
+            difficulty !== "all" ||
+            favoritesOnly ||
+            query) && (
             <button
               onClick={() => {
                 setActiveBank("all");
                 setQtype("all");
                 setDifficulty("all");
+                setFavoritesOnly(false);
                 setQueryInput("");
               }}
               className="flex h-8 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
@@ -204,6 +241,35 @@ export function QuestionBankPanel({
           )}
         </div>
       </div>
+
+      {/* Recently asked (ticket #18) — client-side, so empty until you ask one */}
+      {!readOnly && recentQuestions.length > 0 && (
+        <div
+          data-testid="recent-questions"
+          className="border-b px-3 py-2"
+        >
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Recently asked
+          </p>
+          <div className="flex flex-col gap-1">
+            {recentQuestions.map((item) => {
+              const asked = askedIds.has(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={asked}
+                  onClick={() => onAsk(item)}
+                  className="truncate rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                  title={item.question}
+                >
+                  {item.question}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {byCategory.length === 0 ? (
@@ -246,6 +312,10 @@ export function QuestionBankPanel({
                             className="rounded-lg border bg-card/50 p-2.5"
                           >
                             <div className="flex items-start gap-2">
+                              <FavoriteStar
+                                questionId={item.id}
+                                initialFavorite={favorites.has(item.id)}
+                              />
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <DifficultyBadge difficulty={item.difficulty} />

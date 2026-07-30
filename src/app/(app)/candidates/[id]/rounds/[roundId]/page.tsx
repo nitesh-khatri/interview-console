@@ -8,7 +8,11 @@ import {
   listAssignableUsers,
 } from "@/lib/queries";
 import { getDb, getSettingJson } from "@/lib/db";
-import { listBanks, listAllActiveQuestions } from "@/lib/queries";
+import {
+  listBanks,
+  listAllActiveQuestions,
+  listFavoriteQuestionIds,
+} from "@/lib/queries";
 import { DEFAULT_ROUND_PRESETS } from "@/lib/types";
 import { InterviewConsole } from "@/components/console/interview-console";
 import type { RoundSummary } from "@/lib/pipeline";
@@ -28,6 +32,7 @@ export default async function RoundConsolePage({
   const ratings = getRoundRatings(round.id);
   const banks = listBanks();
   const bankQuestions = listAllActiveQuestions();
+  const favoriteIds = listFavoriteQuestionIds(user.id);
 
   // Previous rounds (for the candidate info panel).
   const previousRounds = getDb()
@@ -84,6 +89,7 @@ export default async function RoundConsolePage({
       initialRatings={ratings}
       banks={banks}
       bankQuestions={bankQuestions}
+      favoriteIds={favoriteIds}
       previousRounds={previousRounds}
       readOnly={readOnly}
       canReopen={canReopen}

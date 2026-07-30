@@ -146,6 +146,8 @@ export function consoleProps(over: Record<string, unknown> = {}) {
     initialRatings: ratings,
     banks,
     bankQuestions,
+    favoriteIds: [],
+    recentIds: [],
     previousRounds,
     readOnly: false,
     canReopen: false,

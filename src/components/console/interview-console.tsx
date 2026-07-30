@@ -56,6 +56,7 @@ import { AssignRoundDialog } from "@/components/candidates/assign-round-dialog";
 import { ArrowRightCircle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useRecentQuestions } from "@/lib/use-recent-questions";
 
 type BankQuestion = Question & { bank_name: string };
 
@@ -90,6 +91,7 @@ export function InterviewConsole({
   initialRatings,
   banks,
   bankQuestions,
+  favoriteIds = [],
   previousRounds,
   readOnly,
   canReopen,
@@ -105,6 +107,7 @@ export function InterviewConsole({
   initialRatings: RoundRating[];
   banks: QuestionBank[];
   bankQuestions: BankQuestion[];
+  favoriteIds?: number[];
   previousRounds: RoundSummary[];
   readOnly: boolean;
   canReopen: boolean;
@@ -138,6 +141,7 @@ export function InterviewConsole({
     "ic-console-panel-width",
     380
   );
+  const { recent: recentIds, record: recordRecent } = useRecentQuestions();
 
   const askedIds = useMemo(
     () => new Set(asked.filter((a) => a.question_id).map((a) => a.question_id!)),
@@ -232,6 +236,7 @@ export function InterviewConsole({
           toast.info("That question is already in this round");
           return;
         }
+        recordRecent(q.id); // remember it for "recently asked" (ticket #18)
         setAsked((prev) => [
           ...prev,
           {
@@ -252,7 +257,7 @@ export function InterviewConsole({
         toast.error((e as Error).message);
       }
     },
-    [round.id]
+    [round.id, recordRecent]
   );
 
   async function addAdhoc() {
@@ -630,6 +635,8 @@ export function InterviewConsole({
             banks={banks.map((b) => ({ id: b.id, name: b.name }))}
             bankQuestions={bankQuestions}
             askedIds={askedIds}
+            favoriteIds={favoriteIds}
+            recentIds={recentIds}
             onAsk={addQuestion}
             onAskAdhoc={() => setAdhocOpen(true)}
             readOnly={readOnly}
