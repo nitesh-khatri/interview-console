@@ -1,6 +1,7 @@
 import { Link2 } from "lucide-react";
 import type { Report } from "@/lib/report";
 import { fmtDate } from "@/lib/client";
+import { Markdown } from "@/components/markdown";
 import {
   StatusBadge,
   ScoreChip,
@@ -142,8 +143,9 @@ export function ReportBody({ report }: { report: Report }) {
 
               {r.overall_notes && (
                 <div className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
-                  <span className="font-medium">Summary: </span>
-                  {r.overall_notes}
+                  <span className="font-medium">Summary</span>
+                  {/* Markdown, rendered safely — this is a public page. */}
+                  <Markdown source={r.overall_notes} className="mt-1 space-y-2" />
                 </div>
               )}
             </section>

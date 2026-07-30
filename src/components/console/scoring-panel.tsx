@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Markdown } from "@/components/markdown";
 import { Plus, X } from "lucide-react";
 import type { RoundRating, Recommendation } from "@/lib/types";
 import { RECOMMENDATIONS } from "@/lib/types";
@@ -35,6 +36,7 @@ export function ScoringPanel({
   readOnly: boolean;
 }) {
   const [newParam, setNewParam] = useState("");
+  const [notesPreview, setNotesPreview] = useState(false);
 
   const avg = (() => {
     const scored = ratings.filter((r) => r.score !== null);
@@ -127,14 +129,35 @@ export function ScoringPanel({
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold">Overall notes</h3>
-        <Textarea
-          value={overallNotes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          placeholder="Summary, strengths, concerns…"
-          rows={5}
-          disabled={readOnly}
-        />
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Overall notes</h3>
+          <button
+            type="button"
+            data-testid="notes-preview-toggle"
+            aria-pressed={notesPreview}
+            onClick={() => setNotesPreview((v) => !v)}
+            className="rounded px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            {notesPreview ? "Write" : "Preview"}
+          </button>
+        </div>
+        {notesPreview ? (
+          <div className="min-h-[7.5rem] rounded-md border bg-muted/30 p-3">
+            {overallNotes.trim() ? (
+              <Markdown source={overallNotes} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Nothing to preview.</p>
+            )}
+          </div>
+        ) : (
+          <Textarea
+            value={overallNotes}
+            onChange={(e) => onNotesChange(e.target.value)}
+            placeholder="Summary, strengths, concerns… Markdown supported."
+            rows={5}
+            disabled={readOnly}
+          />
+        )}
       </div>
     </div>
   );
