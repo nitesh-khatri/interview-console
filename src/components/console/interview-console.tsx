@@ -26,7 +26,7 @@ import type {
 } from "@/lib/types";
 import type { RoundSummary } from "@/lib/pipeline";
 import { api } from "@/lib/client";
-import { useDebouncedSave } from "@/lib/use-debounced-save";
+import { useDebouncedSave, combineSaveStatus } from "@/lib/use-debounced-save";
 import { useResizable } from "@/lib/use-resizable";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +48,7 @@ import { Label } from "@/components/ui/label";
 import { RoundStatusBadge, DifficultyBadge, TypeBadge } from "@/components/badges";
 import { ScoreButtons } from "@/components/console/score-buttons";
 import { QuestionBankPanel } from "@/components/console/question-bank-panel";
+import { SaveStatusIndicator } from "@/components/console/save-status";
 import { ScoringPanel } from "@/components/console/scoring-panel";
 import { CandidateInfoPanel } from "@/components/console/candidate-info-panel";
 import { AssignRoundDialog } from "@/components/candidates/assign-round-dialog";
@@ -117,32 +118,62 @@ export function InterviewConsole({
   // ---- persistence helpers ----
   // Each returns its promise so `flush()` can await pending saves before we
   // complete the round (which makes it read-only server-side).
-  const { trigger: saveQuestionField, flush: flushQuestionFields } =
-    useDebouncedSave((key, value) => {
-      const rqId = Number(key.split(":")[1]);
-      return api(`/api/rounds/${round.id}/questions/${rqId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ notes: value }),
-      }).catch((e) => toast.error((e as Error).message));
+  const {
+    trigger: saveQuestionField,
+    flush: flushQuestionFields,
+    status: questionSaveStatus,
+    retry: retryQuestionFields,
+  } = useDebouncedSave((key, value) => {
+    const rqId = Number(key.split(":")[1]);
+    // Deliberately not caught here. The hook needs the rejection to report
+    // "Not saved", and the indicator is a better home for that than a toast
+    // that vanishes after a few seconds.
+    return api(`/api/rounds/${round.id}/questions/${rqId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ notes: value }),
     });
+  });
 
-  const { trigger: saveOverallNotes, flush: flushOverallNotes } =
-    useDebouncedSave((_key, value) => {
-      return api(`/api/rounds/${round.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ overall_notes: value }),
-      }).catch((e) => toast.error((e as Error).message));
-    });
-
-  const { trigger: saveRatingNote, flush: flushRatingNotes } = useDebouncedSave(
-    (key, value) => {
-      const param = key.slice("rating:".length);
-      return api(`/api/rounds/${round.id}/ratings`, {
-        method: "PUT",
-        body: JSON.stringify({ param_name: param, note: value }),
-      }).catch((e) => toast.error((e as Error).message));
-    }
+  const {
+    trigger: saveOverallNotes,
+    flush: flushOverallNotes,
+    status: overallSaveStatus,
+    retry: retryOverallNotes,
+  } = useDebouncedSave((_key, value) =>
+    api(`/api/rounds/${round.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ overall_notes: value }),
+    })
   );
+
+  const {
+    trigger: saveRatingNote,
+    flush: flushRatingNotes,
+    status: ratingSaveStatus,
+    retry: retryRatingNotes,
+  } = useDebouncedSave((key, value) => {
+    const param = key.slice("rating:".length);
+    return api(`/api/rounds/${round.id}/ratings`, {
+      method: "PUT",
+      body: JSON.stringify({ param_name: param, note: value }),
+    });
+  });
+
+  // One combined answer to "is my work safe?" — three indicators for one
+  // question would be worse UX and more code.
+  const saveStatus = combineSaveStatus([
+    questionSaveStatus,
+    overallSaveStatus,
+    ratingSaveStatus,
+  ]);
+
+  async function retrySaves() {
+    await Promise.all([
+      retryQuestionFields(),
+      retryOverallNotes(),
+      retryRatingNotes(),
+    ]);
+  }
 
   /** Persist any in-flight debounced edits before a status change. */
   async function flushPendingSaves() {
@@ -161,7 +192,11 @@ export function InterviewConsole({
           `/api/rounds/${round.id}/questions`,
           { method: "POST", body: JSON.stringify({ question_id: q.id }) }
         );
-        if (res.duplicate) return;
+        if (res.duplicate) {
+          // Used to return silently, so the click looked like it did nothing.
+          toast.info("That question is already in this round");
+          return;
+        }
         setAsked((prev) => [
           ...prev,
           {
@@ -220,13 +255,26 @@ export function InterviewConsole({
   }
 
   function setScore(rqId: number, score: number | null) {
-    setAsked((prev) =>
-      prev.map((a) => (a.id === rqId ? { ...a, score } : a))
-    );
+    // Capture the value we are replacing so a rejected write can be undone.
+    // The console's job is to show what is actually recorded about the
+    // candidate; leaving a score on screen that the server refused is worse
+    // than showing nothing.
+    const previous = asked.find((a) => a.id === rqId)?.score ?? null;
+    setAsked((prev) => prev.map((a) => (a.id === rqId ? { ...a, score } : a)));
+
     api(`/api/rounds/${round.id}/questions/${rqId}`, {
       method: "PATCH",
       body: JSON.stringify({ score }),
-    }).catch((e) => toast.error((e as Error).message));
+    }).catch((e) => {
+      toast.error((e as Error).message);
+      // Only undo if nothing else has changed this score in the meantime —
+      // a rollback must not clobber a newer edit.
+      setAsked((prev) =>
+        prev.map((a) =>
+          a.id === rqId && a.score === score ? { ...a, score: previous } : a
+        )
+      );
+    });
   }
 
   function setQuestionNotes(rqId: number, notes: string) {
@@ -237,21 +285,46 @@ export function InterviewConsole({
   }
 
   async function removeQuestion(rqId: number) {
+    // Remember where it was — putting a question back at the end of the list
+    // when it was third is still a bug.
+    const index = asked.findIndex((a) => a.id === rqId);
+    const removed = asked[index];
     setAsked((prev) => prev.filter((a) => a.id !== rqId));
+
     api(`/api/rounds/${round.id}/questions/${rqId}`, { method: "DELETE" }).catch(
-      (e) => toast.error((e as Error).message)
+      (e) => {
+        toast.error((e as Error).message);
+        if (!removed) return;
+        setAsked((prev) => {
+          if (prev.some((a) => a.id === rqId)) return prev; // already back
+          const next = [...prev];
+          next.splice(Math.min(index, next.length), 0, removed);
+          return next;
+        });
+      }
     );
   }
 
   // ---- rating actions ----
   function setRatingScore(param: string, score: number | null) {
+    const previous = ratings.find((r) => r.param_name === param)?.score ?? null;
     setRatings((prev) =>
       prev.map((r) => (r.param_name === param ? { ...r, score } : r))
     );
+
     api(`/api/rounds/${round.id}/ratings`, {
       method: "PUT",
       body: JSON.stringify({ param_name: param, score }),
-    }).catch((e) => toast.error((e as Error).message));
+    }).catch((e) => {
+      toast.error((e as Error).message);
+      setRatings((prev) =>
+        prev.map((r) =>
+          r.param_name === param && r.score === score
+            ? { ...r, score: previous }
+            : r
+        )
+      );
+    });
   }
 
   function setRatingNote(param: string, note: string) {
@@ -284,11 +357,23 @@ export function InterviewConsole({
   }
 
   async function removeRatingParam(param: string) {
+    const index = ratings.findIndex((r) => r.param_name === param);
+    const removed = ratings[index];
     setRatings((prev) => prev.filter((r) => r.param_name !== param));
+
     api(`/api/rounds/${round.id}/ratings`, {
       method: "DELETE",
       body: JSON.stringify({ param_name: param }),
-    }).catch((e) => toast.error((e as Error).message));
+    }).catch((e) => {
+      toast.error((e as Error).message);
+      if (!removed) return;
+      setRatings((prev) => {
+        if (prev.some((r) => r.param_name === param)) return prev;
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, removed);
+        return next;
+      });
+    });
   }
 
   function setRec(r: Recommendation | null) {
@@ -378,6 +463,9 @@ export function InterviewConsole({
           </div>
         </div>
         <div className="ml-auto flex items-center gap-3">
+          {!readOnly && (
+            <SaveStatusIndicator status={saveStatus} onRetry={retrySaves} />
+          )}
           <RoundTimer status={status} startedAt={startedAt} />
           <div className="text-sm">
             <span className="text-muted-foreground">Avg</span>{" "}
@@ -594,7 +682,10 @@ function AskedQuestionCard({
 }) {
   const [notes, setNotes] = useState(item.notes ?? "");
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div
+      data-testid={`asked-question-${item.id}`}
+      className="rounded-xl border bg-card p-3"
+    >
       <div className="flex items-start gap-2">
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
           {index}
