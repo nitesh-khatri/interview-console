@@ -13,6 +13,7 @@ import {
   Trash2,
   Plus,
   Lock,
+  GripVertical,
 } from "lucide-react";
 import type {
   Candidate,
@@ -53,8 +54,33 @@ import { ScoringPanel } from "@/components/console/scoring-panel";
 import { CandidateInfoPanel } from "@/components/console/candidate-info-panel";
 import { AssignRoundDialog } from "@/components/candidates/assign-round-dialog";
 import { ArrowRightCircle, RotateCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type BankQuestion = Question & { bank_name: string };
+
+/** Returns a new array with the item at `from` moved to `to`. */
+function move<T>(arr: T[], from: number, to: number): T[] {
+  const next = [...arr];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+/**
+ * Is the keystroke aimed at something the user is typing into? Global
+ * shortcuts must stay out of the way of note-taking, so "just 3 things" in a
+ * notes field never scores anything.
+ */
+function isTypingTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  const tag = el.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    el.isContentEditable
+  );
+}
 
 export function InterviewConsole({
   candidate,
@@ -99,6 +125,11 @@ export function InterviewConsole({
   const [adhocOpen, setAdhocOpen] = useState(false);
   const [adhocText, setAdhocText] = useState("");
   const [startedAt, setStartedAt] = useState<string | null>(round.started_at);
+  // Keyboard scoring (ticket #11): which asked question the number keys target.
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Drag-and-drop reorder (ticket #14): the row currently being dragged.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const { width: panelWidth, onMouseDown: onResize, dragging } = useResizable(
     "ic-console-panel-width",
     380
@@ -304,6 +335,77 @@ export function InterviewConsole({
       }
     );
   }
+
+  /**
+   * Move an asked question from one position to another, optimistically, and
+   * persist the new order. Shared by drag-and-drop and the keyboard arrows so
+   * the two paths can never drift apart (ticket #14).
+   */
+  function moveQuestion(from: number, to: number) {
+    if (from === to || from < 0 || to < 0) return;
+    const before = asked;
+    if (to >= before.length) return;
+
+    const reordered = move(before, from, to);
+    setAsked(reordered);
+    setActiveIndex(to);
+
+    api(`/api/rounds/${round.id}/questions/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ ordered_ids: reordered.map((a) => a.id) }),
+    }).catch((e) => {
+      toast.error((e as Error).message);
+      // Roll back to the order the server still has (same principle as #13).
+      setAsked(before);
+    });
+  }
+
+  // ---- keyboard shortcuts (ticket #11) ----
+  // The handler is kept in a ref, refreshed each render by an effect, so the
+  // window listener subscribes once and never goes stale — and no ref is
+  // written during render.
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    onKeyRef.current = (e: KeyboardEvent) => {
+      if (readOnly) return;
+      // While the help dialog is up, the only shortcut is "close it".
+      if (shortcutsOpen) {
+        if (e.key === "Escape") setShortcutsOpen(false);
+        return;
+      }
+      // Never hijack a keystroke meant for a text field or an open dialog.
+      if (isTypingTarget(e.target) || adhocOpen) return;
+
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+      if (asked.length === 0) return;
+
+      if (e.key === "j") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(asked.length - 1, i + 1));
+      } else if (e.key === "k") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(0, i - 1));
+      } else if (/^[0-5]$/.test(e.key)) {
+        e.preventDefault();
+        const q = asked[Math.min(activeIndex, asked.length - 1)];
+        if (q) setScore(q.id, e.key === "0" ? null : Number(e.key));
+      }
+    };
+  });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => onKeyRef.current(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Clamp for rendering rather than writing state back in an effect: if a
+  // deletion left `activeIndex` past the end, the highlight lands on the last
+  // row instead of nowhere. The number-key handler clamps the same way.
+  const clampedActiveIndex = Math.min(activeIndex, Math.max(0, asked.length - 1));
 
   // ---- rating actions ----
   function setRatingScore(param: string, score: number | null) {
@@ -577,9 +679,22 @@ export function InterviewConsole({
                     index={i + 1}
                     item={a}
                     readOnly={readOnly}
+                    active={!readOnly && i === clampedActiveIndex}
+                    isDragging={i === dragIndex}
                     onScore={(s) => setScore(a.id, s)}
                     onNotes={(n) => setQuestionNotes(a.id, n)}
                     onRemove={() => removeQuestion(a.id)}
+                    onFocusRow={() => setActiveIndex(i)}
+                    onMoveUp={i > 0 ? () => moveQuestion(i, i - 1) : undefined}
+                    onMoveDown={
+                      i < asked.length - 1 ? () => moveQuestion(i, i + 1) : undefined
+                    }
+                    onDragStartRow={() => setDragIndex(i)}
+                    onDragEndRow={() => setDragIndex(null)}
+                    onDropRow={() => {
+                      if (dragIndex !== null) moveQuestion(dragIndex, i);
+                      setDragIndex(null);
+                    }}
                   />
                 ))}
               </div>
@@ -661,6 +776,34 @@ export function InterviewConsole({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Keyboard shortcuts help (ticket #11) */}
+      <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+        <DialogContent data-testid="shortcuts-dialog">
+          <DialogHeader>
+            <DialogTitle>Keyboard shortcuts</DialogTitle>
+          </DialogHeader>
+          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
+            {[
+              ["j", "Move to the next question"],
+              ["k", "Move to the previous question"],
+              ["1 – 5", "Score the focused question"],
+              ["0", "Clear the focused question's score"],
+              ["?", "Show this help"],
+              ["Esc", "Close this help"],
+            ].map(([key, desc]) => (
+              <div key={key} className="contents">
+                <dt>
+                  <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                    {key}
+                  </kbd>
+                </dt>
+                <dd className="text-muted-foreground">{desc}</dd>
+              </div>
+            ))}
+          </dl>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -669,24 +812,87 @@ function AskedQuestionCard({
   index,
   item,
   readOnly,
+  active,
+  isDragging,
   onScore,
   onNotes,
   onRemove,
+  onFocusRow,
+  onMoveUp,
+  onMoveDown,
+  onDragStartRow,
+  onDragEndRow,
+  onDropRow,
 }: {
   index: number;
   item: RoundQuestion;
   readOnly: boolean;
+  active: boolean;
+  isDragging: boolean;
   onScore: (s: number | null) => void;
   onNotes: (n: string) => void;
   onRemove: () => void;
+  onFocusRow: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onDragStartRow: () => void;
+  onDragEndRow: () => void;
+  onDropRow: () => void;
 }) {
   const [notes, setNotes] = useState(item.notes ?? "");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Keep the keyboard-focused row on screen as `j`/`k` walk the list.
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
+  function onHandleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowUp" && onMoveUp) {
+      e.preventDefault();
+      onMoveUp();
+    } else if (e.key === "ArrowDown" && onMoveDown) {
+      e.preventDefault();
+      onMoveDown();
+    }
+  }
+
   return (
     <div
+      ref={ref}
       data-testid={`asked-question-${item.id}`}
-      className="rounded-xl border bg-card p-3"
+      data-active={active ? "true" : undefined}
+      onMouseDown={onFocusRow}
+      onDragOver={readOnly ? undefined : (e) => e.preventDefault()}
+      onDrop={
+        readOnly
+          ? undefined
+          : (e) => {
+              e.preventDefault();
+              onDropRow();
+            }
+      }
+      className={cn(
+        "rounded-xl border bg-card p-3 transition-shadow",
+        active && "ring-2 ring-primary",
+        isDragging && "opacity-50"
+      )}
     >
       <div className="flex items-start gap-2">
+        {!readOnly && (
+          <button
+            type="button"
+            draggable
+            onDragStart={onDragStartRow}
+            onDragEnd={onDragEndRow}
+            onKeyDown={onHandleKeyDown}
+            data-testid={`drag-handle-${item.id}`}
+            aria-label={`Reorder question ${index}. Use the arrow keys to move it.`}
+            className="mt-0.5 flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
           {index}
         </span>
@@ -713,7 +919,7 @@ function AskedQuestionCard({
           <button
             onClick={onRemove}
             className="text-muted-foreground hover:text-destructive"
-            aria-label="Remove question"
+            aria-label={`Remove question ${index}`}
           >
             <Trash2 className="h-4 w-4" />
           </button>
