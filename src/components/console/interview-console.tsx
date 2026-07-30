@@ -26,7 +26,7 @@ import type {
   RoundStatus,
 } from "@/lib/types";
 import type { RoundSummary } from "@/lib/pipeline";
-import { api } from "@/lib/client";
+import { api, formatDuration, roundDurationSeconds } from "@/lib/client";
 import { useDebouncedSave, combineSaveStatus } from "@/lib/use-debounced-save";
 import { useResizable } from "@/lib/use-resizable";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ import { CandidateInfoPanel } from "@/components/console/candidate-info-panel";
 import { AssignRoundDialog } from "@/components/candidates/assign-round-dialog";
 import { ArrowRightCircle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type BankQuestion = Question & { bank_name: string };
 
@@ -130,6 +131,9 @@ export function InterviewConsole({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Drag-and-drop reorder (ticket #14): the row currently being dragged.
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Confirmations for irreversible actions (ticket #23).
+  const [confirmDelete, setConfirmDelete] = useState<RoundQuestion | null>(null);
+  const [confirmComplete, setConfirmComplete] = useState(false);
   const { width: panelWidth, onMouseDown: onResize, dragging } = useResizable(
     "ic-console-panel-width",
     380
@@ -568,7 +572,11 @@ export function InterviewConsole({
           {!readOnly && (
             <SaveStatusIndicator status={saveStatus} onRetry={retrySaves} />
           )}
-          <RoundTimer status={status} startedAt={startedAt} />
+          <RoundTimer
+            status={status}
+            startedAt={startedAt}
+            completedAt={round.completed_at}
+          />
           <div className="text-sm">
             <span className="text-muted-foreground">Avg</span>{" "}
             <span className="font-semibold tabular-nums">
@@ -582,7 +590,7 @@ export function InterviewConsole({
             </Button>
           )}
           {!readOnly && status === "in_progress" && (
-            <Button size="sm" onClick={completeRound}>
+            <Button size="sm" onClick={() => setConfirmComplete(true)}>
               <CheckCircle2 className="h-4 w-4" />
               Complete
             </Button>
@@ -683,7 +691,7 @@ export function InterviewConsole({
                     isDragging={i === dragIndex}
                     onScore={(s) => setScore(a.id, s)}
                     onNotes={(n) => setQuestionNotes(a.id, n)}
-                    onRemove={() => removeQuestion(a.id)}
+                    onRemove={() => setConfirmDelete(a)}
                     onFocusRow={() => setActiveIndex(i)}
                     onMoveUp={i > 0 ? () => moveQuestion(i, i - 1) : undefined}
                     onMoveDown={
@@ -804,6 +812,32 @@ export function InterviewConsole({
           </dl>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmations for irreversible actions (ticket #23) */}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title="Delete this question?"
+        description={
+          <>
+            “{confirmDelete?.question_text}” and its score and notes will be
+            removed from this round. This can’t be undone.
+          </>
+        }
+        confirmLabel="Delete question"
+        destructive
+        onConfirm={() => {
+          if (confirmDelete) removeQuestion(confirmDelete.id);
+        }}
+      />
+      <ConfirmDialog
+        open={confirmComplete}
+        onOpenChange={setConfirmComplete}
+        title="Complete this round?"
+        description="Completing marks the round read-only. You can reopen it later, but make sure you've finished scoring first."
+        confirmLabel="Complete round"
+        onConfirm={completeRound}
+      />
     </div>
   );
 }
@@ -975,33 +1009,31 @@ function RailButton({
 function RoundTimer({
   status,
   startedAt,
+  completedAt,
 }: {
   status: RoundStatus;
   startedAt: string | null;
+  completedAt: string | null;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [now, setNow] = useState(() => new Date());
 
+  // The interval runs *only* while the round is live. A completed round shows a
+  // fixed duration, so ticking it once a second forever is pure waste.
   useEffect(() => {
-    if (status === "in_progress" && startedAt) {
-      intervalRef.current = setInterval(() => setNow(Date.now()), 1000);
-      return () => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      };
-    }
+    if (status !== "in_progress" || !startedAt) return;
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
   }, [status, startedAt]);
 
-  if (!startedAt || status === "pending") return null;
+  const seconds = roundDurationSeconds(status, startedAt, completedAt, now);
+  if (seconds === null) return null;
 
-  const start = new Date(
-    startedAt.includes("T") ? startedAt : startedAt.replace(" ", "T") + "Z"
-  ).getTime();
-  const secs = Math.max(0, Math.floor((now - start) / 1000));
-  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
-  const ss = String(secs % 60).padStart(2, "0");
   return (
-    <span className="hidden font-mono text-sm tabular-nums text-muted-foreground sm:inline">
-      {mm}:{ss}
+    <span
+      className="hidden font-mono text-sm tabular-nums text-muted-foreground sm:inline"
+      title={status === "completed" ? "Interview duration" : "Elapsed"}
+    >
+      {formatDuration(seconds)}
     </span>
   );
 }

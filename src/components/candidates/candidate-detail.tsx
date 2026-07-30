@@ -38,6 +38,7 @@ import {
 } from "@/components/badges";
 import { AssignRoundDialog } from "@/components/candidates/assign-round-dialog";
 import { EditCandidateDialog } from "@/components/candidates/edit-candidate-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type Round = RoundSummary & {
   overall_notes: string | null;
@@ -64,6 +65,7 @@ export function CandidateDetail({
     candidate.share_token
   );
   const [busy, setBusy] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   const mayInterview = canInterview(currentUser.role);
   // Everyone (incl. HR) can create/assign rounds; only interviewers/admin conduct them.
@@ -84,25 +86,31 @@ export function CandidateDetail({
     }
   }
 
-  async function toggleShare() {
+  async function createShare() {
     setBusy(true);
     try {
-      if (shareToken) {
-        await api(`/api/candidates/${candidate.id}/share`, { method: "DELETE" });
-        setShareToken(null);
-        toast.success("Share link revoked");
-      } else {
-        const { share_token } = await api<{ share_token: string }>(
-          `/api/candidates/${candidate.id}/share`,
-          { method: "POST" }
-        );
-        setShareToken(share_token);
-        toast.success("Share link created");
-      }
+      const { share_token } = await api<{ share_token: string }>(
+        `/api/candidates/${candidate.id}/share`,
+        { method: "POST" }
+      );
+      setShareToken(share_token);
+      toast.success("Share link created");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Revoking breaks a URL that may already be in someone's inbox, so it's
+  // gated behind a confirmation (ticket #23). Creating a link is not.
+  async function revokeShare() {
+    try {
+      await api(`/api/candidates/${candidate.id}/share`, { method: "DELETE" });
+      setShareToken(null);
+      toast.success("Share link revoked");
+    } catch (err) {
+      toast.error((err as Error).message);
     }
   }
 
@@ -250,7 +258,7 @@ export function CandidateDetail({
             <Button
               variant={shareToken ? "outline" : "default"}
               size="sm"
-              onClick={toggleShare}
+              onClick={() => (shareToken ? setConfirmRevoke(true) : createShare())}
               disabled={busy}
             >
               {shareToken ? (
@@ -379,6 +387,16 @@ export function CandidateDetail({
         candidate={candidate}
         open={editOpen}
         onOpenChange={setEditOpen}
+      />
+
+      <ConfirmDialog
+        open={confirmRevoke}
+        onOpenChange={setConfirmRevoke}
+        title="Revoke this share link?"
+        description="Anyone who already has the link will lose access immediately, including people you've already sent it to. You can create a new link later, but it will be a different URL."
+        confirmLabel="Revoke link"
+        destructive
+        onConfirm={revokeShare}
       />
     </div>
   );

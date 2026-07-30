@@ -144,6 +144,15 @@ describe("ticket 13 — optimistic updates roll back", () => {
         .filter((b) => !/^Score [0-5]$/.test(b.getAttribute("aria-label") ?? ""))[0];
     };
 
+    // Deleting may be gated behind a confirmation (ticket #23). Click the bin,
+    // then confirm if a dialog appears, so this passes either way.
+    const confirmIfAsked = async (user: ReturnType<typeof userEvent.setup>) => {
+      const dialog = screen.queryByTestId("confirm-dialog");
+      if (dialog) {
+        await user.click(within(dialog).getByRole("button", { name: /delete/i }));
+      }
+    };
+
     it("puts the question back when the delete fails", async () => {
       const user = userEvent.setup();
       api.mockRejectedValue(new Error("offline"));
@@ -151,6 +160,7 @@ describe("ticket 13 — optimistic updates roll back", () => {
 
       expect(screen.queryByTestId("asked-question-2")).toBeInTheDocument();
       await user.click(deleteButton(2));
+      await confirmIfAsked(user);
       await waitFor(() =>
         expect(screen.getByTestId("asked-question-2")).toBeInTheDocument()
       );
@@ -162,6 +172,7 @@ describe("ticket 13 — optimistic updates roll back", () => {
       renderConsole();
 
       await user.click(deleteButton(2));
+      await confirmIfAsked(user);
       await waitFor(() =>
         expect(screen.getByTestId("asked-question-2")).toBeInTheDocument()
       );

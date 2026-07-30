@@ -103,6 +103,46 @@ export function fmtRelative(value: string | null, now: Date = new Date()): strin
   return fmtDate(value);
 }
 
+/**
+ * Formats an elapsed duration in seconds as a clock: `mm:ss`, or `h:mm:ss` once
+ * it passes an hour. Kept pure and separate from the ticking component so the
+ * formatting can be tested without a clock (ticket #25).
+ */
+export function formatDuration(totalSeconds: number): string {
+  const secs = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(secs / 3600);
+  const minutes = Math.floor((secs % 3600) / 60);
+  const seconds = secs % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/**
+ * How long a round took (completed) or has been running (in progress), in
+ * seconds — or null when there's nothing sensible to show. A completed round
+ * with no `completed_at` (older data) falls back to null rather than counting
+ * up to "now" forever.
+ */
+export function roundDurationSeconds(
+  status: string,
+  startedAt: string | null,
+  completedAt: string | null,
+  now: Date = new Date()
+): number | null {
+  if (!startedAt || status === "pending") return null;
+  const start = parseTimestamp(startedAt).getTime();
+  if (isNaN(start)) return null;
+
+  if (status === "completed") {
+    if (!completedAt) return null;
+    const end = parseTimestamp(completedAt).getTime();
+    if (isNaN(end)) return null;
+    return Math.max(0, Math.round((end - start) / 1000));
+  }
+  return Math.max(0, Math.round((now.getTime() - start) / 1000));
+}
+
 function plural(n: number, unit: string): string {
   return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
 }
