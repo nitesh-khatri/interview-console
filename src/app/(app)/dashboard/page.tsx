@@ -3,6 +3,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCandidateSummaries, getPipelineStats } from "@/lib/pipeline";
 import { StatusBadge, ScoreChip, RoundStatusBadge } from "@/components/badges";
 import { AddCandidateDialog } from "@/components/candidates/add-candidate-dialog";
+import {
+  ScoreDistribution,
+  PipelineFunnel,
+  scoreBuckets,
+  type Bar,
+} from "@/components/dashboard/charts";
 import { Button } from "@/components/ui/button";
 import {
   Users,
@@ -27,6 +33,21 @@ export default async function DashboardPage() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(c);
   }
+
+  // Chart data, aggregated on the server (this page already has DB access).
+  const completedAverages = candidates.flatMap((c) =>
+    c.rounds
+      .filter((r) => r.status === "completed" && r.question_avg != null)
+      .map((r) => r.question_avg as number)
+  );
+  const scoreData = scoreBuckets(completedAverages);
+  const funnelData: Bar[] = [
+    { label: "Total", value: stats.total },
+    { label: "In process", value: stats.in_process },
+    { label: "On hold", value: stats.on_hold },
+    { label: "Selected", value: stats.selected },
+    { label: "Rejected", value: stats.rejected },
+  ];
 
   const statCards = [
     { label: "Total", value: stats.total, icon: Users, tone: "text-chart-1" },
@@ -65,6 +86,11 @@ export default async function DashboardPage() {
             </div>
           );
         })}
+      </div>
+
+      <div className="mb-8 grid gap-3 lg:grid-cols-2">
+        <ScoreDistribution data={scoreData} />
+        <PipelineFunnel data={funnelData} />
       </div>
 
       <h2 className="mb-3 text-lg font-semibold">Active pipeline</h2>
