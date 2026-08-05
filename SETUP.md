@@ -121,7 +121,7 @@ Try signing in as each of them — they see genuinely different things:
 Every ticket you pick up has a test that must pass before it's done.
 
 ```powershell
-npm test          # run once
+npm test          # run once 
 npm run test:watch  # re-run automatically as you edit
 ```
 
