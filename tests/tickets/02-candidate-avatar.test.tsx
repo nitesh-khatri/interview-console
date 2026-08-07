@@ -19,7 +19,7 @@ let CandidateAvatar: Mod["CandidateAvatar"];
 let initialsOf: Mod["initialsOf"];
 let colorIndexOf: Mod["colorIndexOf"];
 
-describe.skip("ticket 2 — candidate avatar", () => {
+describe("ticket 2 — candidate avatar", () => {
   beforeAll(async () => {
     ({ CandidateAvatar, initialsOf, colorIndexOf } = await import(
       "@/components/candidate-avatar"

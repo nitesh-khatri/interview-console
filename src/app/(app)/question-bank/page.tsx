@@ -5,7 +5,7 @@ import { QuestionBankView } from "@/components/bank/question-bank-view";
 import { canEditQuestionBank } from "@/lib/session";
 import type { Question } from "@/lib/types";
 
-export default async function QuestionBankPage() {
+export default async function QuestionBankPage() { 
   const user = (await getCurrentUser())!;
   if (!canEditQuestionBank(user.role)) redirect("/dashboard");
 
