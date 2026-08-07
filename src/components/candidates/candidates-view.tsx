@@ -12,6 +12,7 @@ import { StatusBadge, ScoreChip, RoundStatusBadge } from "@/components/badges";
 import { AddCandidateDialog } from "@/components/candidates/add-candidate-dialog";
 import { ShareBatchDialog } from "@/components/candidates/share-batch-dialog";
 import { cn } from "@/lib/utils";
+import { CandidateAvatar } from "./candidate-avatar";
 
 type Filter = "all" | "mine" | "assigned";
 
@@ -35,7 +36,7 @@ export function CandidatesView({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
-    });
+    }); 
   }
 
   const filtered = useMemo(() => {
@@ -53,7 +54,7 @@ export function CandidatesView({
         (c.applied_role ?? "").toLowerCase().includes(q) ||
         (c.current_company ?? "").toLowerCase().includes(q)
       );
-    });
+    }); 
   }, [candidates, query, filter, currentUserId]);
 
   const filters: { key: Filter; label: string }[] = [
@@ -138,74 +139,101 @@ export function CandidatesView({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y">
-              {filtered.map((c) => (
-                <tr
-                  key={c.id}
-                  className={cn(
-                    "group hover:bg-accent/30",
-                    selected.has(c.id) && "bg-primary/5"
-                  )}
-                >
-                  <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
-                      aria-label={`Select ${c.name}`}
-                      checked={selected.has(c.id)}
-                      onChange={() => toggle(c.id)}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/candidates/${c.id}`} className="block">
-                      <div className="font-medium group-hover:underline">
-                        {c.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {[c.applied_role, c.current_company]
-                          .filter(Boolean)
-                          .join(" · ") || "—"}
-                        {c.experience_years != null &&
-                          ` · ${c.experience_years} yr`}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {c.rounds.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">
-                          No rounds yet
-                        </span>
-                      ) : (
-                        c.rounds.map((r) => (
-                          <span
-                            key={r.id}
-                            className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
-                            title={`${r.title} · ${r.interviewer_name ?? "Unassigned"}`}
-                          >
-                            <span className="font-medium">R{r.round_number}</span>
-                            {r.status === "completed" ? (
-                              <ScoreChip score={r.question_avg} />
-                            ) : (
-                              <RoundStatusBadge status={r.status} />
-                            )}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                    {fmtDate(c.created_at)}
-                    {c.created_by_name && (
-                      <div className="text-xs">by {c.created_by_name}</div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+           <tbody className="divide-y">
+  {filtered.map((c) => (
+    <tr
+      key={c.id}
+      className={cn(
+        "group hover:bg-accent/30",
+        selected.has(c.id) && "bg-primary/5"
+      )}
+    >
+      {/* Checkbox */}
+      <td className="px-3 py-3">
+        <input
+          type="checkbox"
+          className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+          aria-label={`Select ${c.name}`}
+          checked={selected.has(c.id)}
+          onChange={() => toggle(c.id)}
+        />
+      </td>
+
+      {/* Candidate Name + Avatar */}
+      <td className="px-4 py-3">
+        <Link
+          href={`/candidates/${c.id}`}
+          className="flex items-center gap-3"
+        >
+          <CandidateAvatar
+            name={c.name}
+            size="md"
+          />
+
+          <div>
+            <div className="font-medium group-hover:underline">
+              {c.name}
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              {[c.applied_role, c.current_company]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+
+              {c.experience_years != null &&
+                ` · ${c.experience_years} yr`}
+            </div>
+          </div>
+        </Link>
+      </td>
+
+      {/* Interview Rounds */}
+      <td className="px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {c.rounds.length === 0 ? (
+            <span className="text-xs text-muted-foreground">
+              No rounds yet
+            </span>
+          ) : (
+            c.rounds.map((r) => (
+              <span
+                key={r.id}
+                className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
+                title={`${r.title} · ${r.interviewer_name ?? "Unassigned"}`}
+              >
+                <span className="font-medium">
+                  R{r.round_number}
+                </span>
+
+                {r.status === "completed" ? (
+                  <ScoreChip score={r.question_avg} />
+                ) : (
+                  <RoundStatusBadge status={r.status} />
+                )}
+              </span>
+            ))
+          )}
+        </div>
+      </td>
+
+      {/* Status */}
+      <td className="px-4 py-3">
+        <StatusBadge status={c.status} />
+      </td>
+
+      {/* Created Date */}
+      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+        {fmtDate(c.created_at)}
+
+        {c.created_by_name && (
+          <div className="text-xs">
+            by {c.created_by_name}
+          </div>
+        )}
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         </div>
       )}

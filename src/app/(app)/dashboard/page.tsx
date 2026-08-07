@@ -14,12 +14,6 @@ import {
 } from "lucide-react";
 
 export default async function DashboardPage() {
-// i have change time to load
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    //test to error
-  // throw new Error("Testing Error Boundary");
-
   const user = (await getCurrentUser())!;
   const stats = getPipelineStats();
   const candidates = getCandidateSummaries();

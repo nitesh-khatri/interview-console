@@ -24,7 +24,7 @@ let ErrorBoundary: React.ComponentType<{
   reset: () => void;
 }>;
 
-describe.skip("ticket 1 — loading and error states", () => {
+describe("ticket 1 — loading and error states", () => {
   beforeAll(async () => {
     CandidatesLoading = (await import("@/app/(app)/candidates/loading")).default;
     DashboardLoading = (await import("@/app/(app)/dashboard/loading")).default;
