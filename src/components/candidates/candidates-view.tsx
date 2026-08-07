@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge, ScoreChip, RoundStatusBadge } from "@/components/badges";
 import { AddCandidateDialog } from "@/components/candidates/add-candidate-dialog";
 import { ShareBatchDialog } from "@/components/candidates/share-batch-dialog";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";are 
 import { CandidateAvatar } from "./candidate-avatar";
 
 type Filter = "all" | "mine" | "assigned";
