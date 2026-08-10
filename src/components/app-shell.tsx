@@ -21,6 +21,7 @@ import {
   type SessionUser,
 } from "@/lib/session";
 import { Button } from "@/components/ui/button";
+import { TooltipProvider } from "@/components/ui/tooltip"; 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeMenu } from "@/components/theme-menu";
 import { ChangePasswordDialog } from "@/components/change-password-dialog";
+
 
 interface NavItem {
   href: string;
@@ -77,6 +79,7 @@ export function AppShell({
     .toUpperCase();
 
   return (
+    <TooltipProvider>
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 border-b bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/80">
         <div className="flex h-14 items-center gap-2 px-4">
@@ -176,5 +179,6 @@ export function AppShell({
         }}
       />
     </div>
+    </TooltipProvider>
   );
 }

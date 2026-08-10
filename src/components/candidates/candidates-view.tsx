@@ -13,6 +13,7 @@ import { AddCandidateDialog } from "@/components/candidates/add-candidate-dialog
 import { ShareBatchDialog } from "@/components/candidates/share-batch-dialog";
 import { cn } from "@/lib/utils";
 import { CandidateAvatar } from "./candidate-avatar";
+import { RelativeTime } from "@/components/relative-time";
 
 type Filter = "all" | "mine" | "assigned";
 
@@ -159,6 +160,7 @@ export function CandidatesView({
         />
       </td>
 
+      
       {/* Candidate Name + Avatar */}
       <td className="px-4 py-3">
         <Link
@@ -186,6 +188,7 @@ export function CandidatesView({
           </div>
         </Link>
       </td>
+
 
       {/* Interview Rounds */}
       <td className="px-4 py-3">
@@ -222,15 +225,16 @@ export function CandidatesView({
       </td>
 
       {/* Created Date */}
-      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-        {fmtDate(c.created_at)}
+        <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+  <RelativeTime value={c.created_at} />
 
-        {c.created_by_name && (
-          <div className="text-xs">
-            by {c.created_by_name}
-          </div>
-        )}
-      </td>
+  {c.created_by_name && (
+    <div className="text-xs">
+      by {c.created_by_name}
+    </div>
+  )}
+</td>
+
     </tr>
   ))}
 </tbody>

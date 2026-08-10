@@ -26,7 +26,7 @@ const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-describe.skip("ticket 3 — relative timestamps", () => {
+describe("ticket 3 — relative timestamps", () => {
   beforeAll(async () => {
     ({ fmtRelative } = await import("@/lib/client"));
     ({ RelativeTime } = await import("@/components/relative-time"));

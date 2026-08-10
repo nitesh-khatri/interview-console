@@ -86,3 +86,64 @@ export function fmtDateTime(value: string | null): string {
     minute: "2-digit",
   });
 }
+
+
+
+
+/**
+ * Format a timestamp as relative time.
+ *
+ * Returns human-friendly text for recent timestamps:
+ * - < 45 seconds: "just now"
+ * - < 1 hour: "X minute(s) ago"
+ * - < 1 day: "X hour(s) ago"
+ * - ≤ 30 days: "X day(s) ago"
+ * - > 30 days: falls back to fmtDate()
+ *
+ * Accepts both ISO timestamps and SQLite UTC timestamps
+ * ("YYYY-MM-DD HH:MM:SS"). The optional `now` parameter allows
+ * callers (and tests) to provide a fixed reference time.
+ */
+export function fmtRelative(
+  value: string | null,
+  now?: Date
+): string {
+  if (!value) return "—";
+
+  // SQLite stores UTC as "YYYY-MM-DD HH:MM:SS". Normalize it to
+  // ISO-8601 so JavaScript parses it as UTC.
+  const iso = value.includes("T") ? value : value.replace(" ", "T") + "Z";
+  const date = new Date(iso);
+
+  // Preserve the original value if it isn't a valid date.
+  if (isNaN(date.getTime())) return value;
+
+  // Allow tests to inject a fixed "current" time.
+  const current = now ?? new Date();
+
+  // Clamp negative values so future timestamps don't produce
+  // messages like "in -3 days".
+  const diffMs = Math.max(0, current.getTime() - date.getTime());
+
+  const seconds = Math.floor(diffMs / 1000);
+
+  if (seconds < 45) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+  if (days <= 30) {
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
+
+  // Older timestamps are shown as calendar dates.
+  return fmtDate(value);
+}
