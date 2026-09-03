@@ -45,7 +45,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RoundStatusBadge, DifficultyBadge, TypeBadge } from "@/components/badges";
+import {
+  RoundStatusBadge,
+  DifficultyBadge,
+  TypeBadge,
+} from "@/components/badges";
 import { ScoreButtons } from "@/components/console/score-buttons";
 import { QuestionBankPanel } from "@/components/console/question-bank-panel";
 import { ScoringPanel } from "@/components/console/scoring-panel";
@@ -91,32 +95,36 @@ export function InterviewConsole({
   const [ratings, setRatings] = useState<RoundRating[]>(initialRatings);
   const [status, setStatus] = useState<RoundStatus>(round.status);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(
-    round.recommendation
+    round.recommendation,
   );
   const [overallNotes, setOverallNotes] = useState(round.overall_notes ?? "");
   const [panel, setPanel] = useState<"scoring" | "info" | null>(null);
   const [adhocOpen, setAdhocOpen] = useState(false);
   const [adhocText, setAdhocText] = useState("");
   const [startedAt, setStartedAt] = useState<string | null>(round.started_at);
-  const { width: panelWidth, onMouseDown: onResize, dragging } = useResizable(
-    "ic-console-panel-width",
-    380
-  );
+
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const {
+    width: panelWidth,
+    onMouseDown: onResize,
+    dragging,
+  } = useResizable("ic-console-panel-width", 380);
 
   const askedIds = useMemo(
-    () => new Set(asked.filter((a) => a.question_id).map((a) => a.question_id!)),
-    [asked]
+    () =>
+      new Set(asked.filter((a) => a.question_id).map((a) => a.question_id!)),
+    [asked],
   );
 
   const scored = asked.filter((a) => a.score !== null);
   const avgScore =
     scored.length > 0
-      ? (scored.reduce((s, a) => s + (a.score ?? 0), 0) / scored.length).toFixed(1)
+      ? (
+          scored.reduce((s, a) => s + (a.score ?? 0), 0) / scored.length
+        ).toFixed(1)
       : null;
 
-  // ---- persistence helpers ----
-  // Each returns its promise so `flush()` can await pending saves before we
-  // complete the round (which makes it read-only server-side).
   const { trigger: saveQuestionField, flush: flushQuestionFields } =
     useDebouncedSave((key, value) => {
       const rqId = Number(key.split(":")[1]);
@@ -141,7 +149,7 @@ export function InterviewConsole({
         method: "PUT",
         body: JSON.stringify({ param_name: param, note: value }),
       }).catch((e) => toast.error((e as Error).message));
-    }
+    },
   );
 
   /** Persist any in-flight debounced edits before a status change. */
@@ -159,7 +167,7 @@ export function InterviewConsole({
       try {
         const res = await api<{ id: number; duplicate?: boolean }>(
           `/api/rounds/${round.id}/questions`,
-          { method: "POST", body: JSON.stringify({ question_id: q.id }) }
+          { method: "POST", body: JSON.stringify({ question_id: q.id }) },
         );
         if (res.duplicate) return;
         setAsked((prev) => [
@@ -182,7 +190,7 @@ export function InterviewConsole({
         toast.error((e as Error).message);
       }
     },
-    [round.id]
+    [round.id],
   );
 
   async function addAdhoc() {
@@ -194,7 +202,7 @@ export function InterviewConsole({
         {
           method: "POST",
           body: JSON.stringify({ question_text: text, qtype: "theory" }),
-        }
+        },
       );
       setAsked((prev) => [
         ...prev,
@@ -219,34 +227,105 @@ export function InterviewConsole({
     }
   }
 
-  function setScore(rqId: number, score: number | null) {
+  const setScore = useCallback(
+  (rqId: number, score: number | null) => {
     setAsked((prev) =>
-      prev.map((a) => (a.id === rqId ? { ...a, score } : a))
+      prev.map((a) => (a.id === rqId ? { ...a, score } : a)),
     );
+
     api(`/api/rounds/${round.id}/questions/${rqId}`, {
       method: "PATCH",
       body: JSON.stringify({ score }),
     }).catch((e) => toast.error((e as Error).message));
-  }
+  },
+  [round.id],
+);
+
+  useEffect(() => {
+    if (readOnly) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+
+      // Don't trigger shortcuts while typing in input/textarea
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      // J = next question
+      if (event.key.toLowerCase() === "j") {
+        setActiveQuestionIndex((current) =>
+          Math.min(current + 1, asked.length - 1),
+        );
+        return;
+      }
+
+      // K = previous question
+      if (event.key.toLowerCase() === "k") {
+        setActiveQuestionIndex((current) => Math.max(current - 1, 0));
+        return;
+      }
+
+      // ? = open shortcuts help
+      if (event.key === "?") {
+        setShortcutsOpen(true);
+        return;
+      }
+
+      // Escape = close shortcuts help
+      if (event.key === "Escape") {
+        setShortcutsOpen(false);
+        return;
+      }
+
+      // Score shortcuts: 0-5
+      if (/^[0-5]$/.test(event.key)) {
+        const activeQuestion = asked[activeQuestionIndex];
+
+        if (!activeQuestion) return;
+
+        const score = event.key === "0" ? null : Number(event.key);
+
+        setScore(activeQuestion.id, score);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [asked, activeQuestionIndex, readOnly, setScore]);
 
   function setQuestionNotes(rqId: number, notes: string) {
-    setAsked((prev) =>
-      prev.map((a) => (a.id === rqId ? { ...a, notes } : a))
-    );
+    setAsked((prev) => prev.map((a) => (a.id === rqId ? { ...a, notes } : a)));
     saveQuestionField(`q:${rqId}`, notes);
   }
 
   async function removeQuestion(rqId: number) {
-    setAsked((prev) => prev.filter((a) => a.id !== rqId));
-    api(`/api/rounds/${round.id}/questions/${rqId}`, { method: "DELETE" }).catch(
-      (e) => toast.error((e as Error).message)
+  setAsked((prev) => {
+    const updated = prev.filter((a) => a.id !== rqId);
+
+    setActiveQuestionIndex((current) =>
+      Math.max(0, Math.min(current, updated.length - 1))
     );
-  }
+
+    return updated;
+  });
+
+  api(`/api/rounds/${round.id}/questions/${rqId}`, {
+    method: "DELETE",
+  }).catch((e) => toast.error((e as Error).message));
+}
 
   // ---- rating actions ----
   function setRatingScore(param: string, score: number | null) {
     setRatings((prev) =>
-      prev.map((r) => (r.param_name === param ? { ...r, score } : r))
+      prev.map((r) => (r.param_name === param ? { ...r, score } : r)),
     );
     api(`/api/rounds/${round.id}/ratings`, {
       method: "PUT",
@@ -256,7 +335,7 @@ export function InterviewConsole({
 
   function setRatingNote(param: string, note: string) {
     setRatings((prev) =>
-      prev.map((r) => (r.param_name === param ? { ...r, note } : r))
+      prev.map((r) => (r.param_name === param ? { ...r, note } : r)),
     );
     saveRatingNote(`rating:${param}`, note);
   }
@@ -449,9 +528,7 @@ export function InterviewConsole({
           <span
             className={
               "absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 transition-colors " +
-              (dragging
-                ? "bg-primary"
-                : "bg-border group-hover:bg-primary/50")
+              (dragging ? "bg-primary" : "bg-border group-hover:bg-primary/50")
             }
           />
         </div>
@@ -489,6 +566,7 @@ export function InterviewConsole({
                     index={i + 1}
                     item={a}
                     readOnly={readOnly}
+                    active={!readOnly && i === activeQuestionIndex}
                     onScore={(s) => setScore(a.id, s)}
                     onNotes={(n) => setQuestionNotes(a.id, n)}
                     onRemove={() => removeQuestion(a.id)}
@@ -573,6 +651,45 @@ export function InterviewConsole({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+            
+            {/* Keyboard shortcuts help */}
+      <Dialog
+        open={shortcutsOpen}
+        onOpenChange={setShortcutsOpen}
+      >
+        <DialogContent data-testid="shortcuts-dialog">
+          <DialogHeader>
+            <DialogTitle>Keyboard shortcuts</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span>Next question</span>
+              <kbd className="rounded border bg-muted px-2 py-1">J</kbd>
+            </div>
+
+            <div className="flex justify-between">
+              <span>Previous question</span>
+              <kbd className="rounded border bg-muted px-2 py-1">K</kbd>
+            </div>
+
+            <div className="flex justify-between">
+              <span>Score question</span>
+              <kbd className="rounded border bg-muted px-2 py-1">1–5</kbd>
+            </div>
+
+            <div className="flex justify-between">
+              <span>Clear score</span>
+              <kbd className="rounded border bg-muted px-2 py-1">0</kbd>
+            </div>
+
+            <div className="flex justify-between">
+              <span>Show shortcuts</span>
+              <kbd className="rounded border bg-muted px-2 py-1">?</kbd>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -581,6 +698,7 @@ function AskedQuestionCard({
   index,
   item,
   readOnly,
+   active,
   onScore,
   onNotes,
   onRemove,
@@ -588,13 +706,20 @@ function AskedQuestionCard({
   index: number;
   item: RoundQuestion;
   readOnly: boolean;
+  active: boolean;
   onScore: (s: number | null) => void;
   onNotes: (n: string) => void;
   onRemove: () => void;
 }) {
   const [notes, setNotes] = useState(item.notes ?? "");
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div 
+     data-testid={`asked-question-${item.id}`}
+    data-active={active ? "true" : undefined}
+    className={
+      "rounded-xl border bg-card p-3 transition-colors " +
+      (active ? "ring-2 ring-primary/40" : "")
+    }>
       <div className="flex items-start gap-2">
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
           {index}
@@ -629,7 +754,11 @@ function AskedQuestionCard({
         )}
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pl-8">
-        <ScoreButtons value={item.score} onChange={onScore} disabled={readOnly} />
+        <ScoreButtons
+          value={item.score}
+          onChange={onScore}
+          disabled={readOnly}
+        />
       </div>
       <div className="mt-2 pl-8">
         <Input
@@ -697,7 +826,7 @@ function RoundTimer({
   if (!startedAt || status === "pending") return null;
 
   const start = new Date(
-    startedAt.includes("T") ? startedAt : startedAt.replace(" ", "T") + "Z"
+    startedAt.includes("T") ? startedAt : startedAt.replace(" ", "T") + "Z",
   ).getTime();
   const secs = Math.max(0, Math.floor((now - start) / 1000));
   const mm = String(Math.floor(secs / 60)).padStart(2, "0");

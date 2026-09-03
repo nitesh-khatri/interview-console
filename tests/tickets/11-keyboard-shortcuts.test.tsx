@@ -32,7 +32,7 @@ vi.mock("sonner", () => ({ toast, Toaster: () => null }));
 
 let InterviewConsole: typeof import("@/components/console/interview-console").InterviewConsole;
 
-describe.skip("ticket 11 — keyboard shortcuts", () => {
+describe("ticket 11 — keyboard shortcuts", () => {
   beforeAll(async () => {
     ({ InterviewConsole } = await import(
       "@/components/console/interview-console"
