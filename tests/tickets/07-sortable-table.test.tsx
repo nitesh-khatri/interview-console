@@ -30,7 +30,7 @@ let CandidatesView: typeof import("@/components/candidates/candidates-view").Can
 let compareCandidates: typeof import("@/components/candidates/candidates-view").compareCandidates;
 let candidateScore: typeof import("@/components/candidates/candidates-view").candidateScore;
 
-describe.skip("ticket 7 — sortable, paginated table", () => {
+describe("ticket 7 — sortable, paginated table", () => {
   beforeAll(async () => {
     ({ CandidatesView, compareCandidates, candidateScore } = await import(
       "@/components/candidates/candidates-view"
