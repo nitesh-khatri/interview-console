@@ -27,7 +27,7 @@ vi.mock("next/navigation", async () => {
  */
 let CandidatesView: typeof import("@/components/candidates/candidates-view").CandidatesView;
 
-describe.skip("ticket 8 — URL as state", () => {
+describe("ticket 8 — URL as state", () => {
   beforeAll(async () => {
     ({ CandidatesView } = await import("@/components/candidates/candidates-view"));
   });
