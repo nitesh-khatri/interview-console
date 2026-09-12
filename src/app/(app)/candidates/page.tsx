@@ -9,7 +9,6 @@ export default async function CandidatesPage() {
     <CandidatesView
       candidates={candidates}
       currentUserId={user.id}
-      role={user.role}
     />
   );
 }

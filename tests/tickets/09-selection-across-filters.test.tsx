@@ -41,7 +41,7 @@ vi.mock("@/components/candidates/share-batch-dialog", () => ({
 
 let CandidatesView: typeof import("@/components/candidates/candidates-view").CandidatesView;
 
-describe.skip("ticket 9 — selection across filters", () => {
+describe("ticket 9 — selection across filters", () => {
   beforeAll(async () => {
     ({ CandidatesView } = await import("@/components/candidates/candidates-view"));
   });
