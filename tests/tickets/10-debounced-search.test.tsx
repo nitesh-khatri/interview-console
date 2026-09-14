@@ -29,7 +29,7 @@ let useDebouncedValue: typeof import("@/lib/use-debounced-value").useDebouncedVa
 let splitOnMatches: typeof import("@/components/highlight").splitOnMatches;
 let CandidatesView: typeof import("@/components/candidates/candidates-view").CandidatesView;
 
-describe.skip("ticket 10 — debounced search and highlighting", () => {
+describe("ticket 10 — debounced search and highlighting", () => {
   beforeAll(async () => {
     ({ useDebouncedValue } = await import("@/lib/use-debounced-value"));
     ({ splitOnMatches } = await import("@/components/highlight"));
@@ -203,16 +203,26 @@ describe.skip("ticket 10 — debounced search and highlighting", () => {
       expect(screen.getByText(/alert\(1\)/)).toBeInTheDocument();
     });
 
-    it("restores the full list as soon as the box is cleared", async () => {
-      const user = userEvent.setup();
-      render(<CandidatesView candidates={manyCandidates()} currentUserId={10} />);
-      const input = screen.getByTestId("search-input");
-      await user.type(input, "priya");
-      await waitFor(() => expect(rows()).toHaveLength(1));
+   it("restores the full list as soon as the box is cleared", async () => {
+  const user = userEvent.setup();
+  const candidates = manyCandidates();
 
-      await user.clear(input);
-      // No waitFor: clearing is not debounced.
-      expect(rows()).toHaveLength(10);
-    });
+  render(
+    <CandidatesView
+      candidates={candidates}
+      currentUserId={10}
+    />
+  );
+
+  const input = screen.getByTestId("search-input");
+
+  await user.type(input, "priya");
+  await waitFor(() => expect(rows()).toHaveLength(1));
+
+  await user.clear(input);
+
+  // Clearing is immediate, so the complete fixture should be visible again.
+  expect(rows()).toHaveLength(candidates.length);
+});
   });
 });

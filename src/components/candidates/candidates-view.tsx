@@ -1,17 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { Highlight } from "@/components/highlight";
+
 import Link from "next/link";
 import { Search, Users, Link2, X } from "lucide-react";
 import type { CandidateSummary } from "@/lib/pipeline";
 import type { Role } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  StatusBadge,
-  ScoreChip,
-  RoundStatusBadge,
-} from "@/components/badges";
+import { StatusBadge, ScoreChip, RoundStatusBadge } from "@/components/badges";
 import { AddCandidateDialog } from "@/components/candidates/add-candidate-dialog";
 import { ShareBatchDialog } from "@/components/candidates/share-batch-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -31,6 +30,10 @@ export function CandidatesView({
   role: Role;
 }) {
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const normalizedQuery =
+    query.trim() === "" ? "" : debouncedQuery.trim();
+
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [shareOpen, setShareOpen] = useState(false);
@@ -46,11 +49,11 @@ export function CandidatesView({
       }
 
       return next;
-    }); 
+    });
   }
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizedQuery.toLowerCase();
 
     return candidates.filter((c) => {
       if (filter === "mine" && c.created_by !== currentUserId) {
@@ -64,17 +67,15 @@ export function CandidatesView({
         return false;
       }
 
-      if (!q) {
-        return true;
-      }
+      if (!q) return true;
 
       return (
         c.name.toLowerCase().includes(q) ||
         (c.applied_role ?? "").toLowerCase().includes(q) ||
         (c.current_company ?? "").toLowerCase().includes(q)
       );
-    }); 
-  }, [candidates, query, filter, currentUserId]);
+    });
+  }, [candidates, normalizedQuery, filter, currentUserId]);
 
   const filters: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
@@ -102,6 +103,7 @@ export function CandidatesView({
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
 
           <Input
+            data-testid="search-input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, role or company…"
@@ -118,7 +120,7 @@ export function CandidatesView({
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                 filter === f.key
                   ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {f.label}
@@ -142,9 +144,7 @@ export function CandidatesView({
           }
           action={
             candidates.length === 0 ? (
-              <AddCandidateDialog
-                trigger={<Button>Add candidate</Button>}
-              />
+              <AddCandidateDialog trigger={<Button>Add candidate</Button>} />
             ) : undefined
           }
         />
@@ -178,126 +178,112 @@ export function CandidatesView({
                   />
                 </th>
 
-                <th className="px-4 py-2.5 font-medium">
-                  Candidate
-                </th>
+                <th className="px-4 py-2.5 font-medium">Candidate</th>
 
-                <th className="px-4 py-2.5 font-medium">
-                  Rounds
-                </th>
+                <th className="px-4 py-2.5 font-medium">Rounds</th>
 
-                <th className="px-4 py-2.5 font-medium">
-                  Status
-                </th>
+                <th className="px-4 py-2.5 font-medium">Status</th>
 
                 <th className="hidden px-4 py-2.5 font-medium md:table-cell">
                   Added
                 </th>
               </tr>
             </thead>
-<tbody className="divide-y">
-  {filtered.map((c) => (
-    <tr
-      key={c.id}
-      className={cn(
-        "group hover:bg-accent/30",
-        selected.has(c.id) && "bg-primary/5"
-      )}
-    >
-      {/* Checkbox */}
-      <td className="px-3 py-3">
-        <input
-          type="checkbox"
-          className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
-          aria-label={`Select ${c.name}`}
-          checked={selected.has(c.id)}
-          onChange={() => toggle(c.id)}
-        />
-      </td>
 
+            <tbody data-slot="table-body" className="divide-y">
+              {filtered.map((c) => (
+                <tr
+                  key={c.id}
+                  className={cn(
+                    "group hover:bg-accent/30",
+                    selected.has(c.id) && "bg-primary/5",
+                  )}
+                >
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+                      aria-label={`Select ${c.name}`}
+                      checked={selected.has(c.id)}
+                      onChange={() => toggle(c.id)}
+                    />
+                  </td>
 
-      {/* Candidate Name + Avatar */}
-      <td className="px-4 py-3">
-        <Link
-          href={`/candidates/${c.id}`}
-          className="flex items-center gap-3"
-        >
-          <CandidateAvatar
-            name={c.name}
-            size="md"
-          />
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/candidates/${c.id}`}
+                      className="flex items-center gap-3"
+                    >
+                      <CandidateAvatar name={c.name} size="sm" />
 
-          <div>
-            <div className="font-medium group-hover:underline">
-              {c.name}
-            </div>
+                      <div>
+                        <div className="font-medium group-hover:underline">
+                          <Highlight
+                            text={c.name}
+                            query={normalizedQuery}
+                          />
+                        </div>
 
-            <div className="text-xs text-muted-foreground">
-              {[c.applied_role, c.current_company]
-                .filter(Boolean)
-                .join(" · ") || "—"}
+                        <div className="text-xs text-muted-foreground">
+                          {[c.applied_role, c.current_company]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
 
-              {c.experience_years != null &&
-                ` · ${c.experience_years} yr`}
-            </div>
-          </div>
-        </Link>
-      </td>
+                          {c.experience_years != null &&
+                            ` · ${c.experience_years} yr`}
+                        </div>
+                      </div>
+                    </Link>
+                  </td>
 
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {c.rounds.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          No rounds yet
+                        </span>
+                      ) : (
+                        c.rounds.map((r) => (
+                          <span
+                            key={r.id}
+                            className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
+                            title={`${r.title} · ${r.interviewer_name ?? "Unassigned"}`}
+                          >
+                            <span className="font-medium">
+                              R{r.round_number}
+                            </span>
 
-      {/* Interview Rounds */}
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {c.rounds.length === 0 ? (
-            <span className="text-xs text-muted-foreground">
-              No rounds yet
-            </span>
-          ) : (
-            c.rounds.map((r) => (
-              <span
-                key={r.id}
-                className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
-                title={`${r.title} · ${r.interviewer_name ?? "Unassigned"}`}
-              >
-                <span className="font-medium">
-                  R{r.round_number}
-                </span>
+                            {r.status === "completed" ? (
+                              <ScoreChip score={r.question_avg} />
+                            ) : (
+                              <RoundStatusBadge status={r.status} />
+                            )}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
 
-                {r.status === "completed" ? (
-                  <ScoreChip score={r.question_avg} />
-                ) : (
-                  <RoundStatusBadge status={r.status} />
-                )}
-              </span>
-            ))
-          )}
-        </div>
-      </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={c.status} />
+                  </td>
 
-      {/* Status */}
-      <td className="px-4 py-3">
-        <StatusBadge status={c.status} />
-      </td>
+                  <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                    <RelativeTime value={c.created_at} />
 
-      
-{/* Created Date */}
-<td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-  <RelativeTime value={c.created_at} />
-
-  {c.created_by_name && (
-    <div className="text-xs">
-      by {c.created_by_name}
-    </div>
-  )}
-</td>
-    </tr>
-  ))}
-</tbody>
+                    {c.created_by_name && (
+                      <div className="text-xs">
+                        by {c.created_by_name}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       )}
 
-      {/* Floating selection action bar */}
       {selected.size > 0 && (
         <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
           <div className="flex items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg">
@@ -305,10 +291,7 @@ export function CandidatesView({
               {selected.size} selected
             </span>
 
-            <Button
-              size="sm"
-              onClick={() => setShareOpen(true)}
-            >
+            <Button size="sm" onClick={() => setShareOpen(true)}>
               <Link2 className="h-4 w-4" />
               Share link
             </Button>

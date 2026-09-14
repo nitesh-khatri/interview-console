@@ -35,6 +35,8 @@ import { DifficultyBadge, TypeBadge } from "@/components/badges";
 import { QuestionFormDialog } from "@/components/bank/question-form-dialog";
 import { ImportDialog } from "@/components/bank/import-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { Highlight } from "@/components/highlight";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { cn } from "@/lib/utils";
 
 const DIFF_ORDER: Record<string, number> = {
@@ -57,12 +59,14 @@ export function QuestionBankView({
   );
 
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const normalizedQuery = debouncedQuery.trim();
+
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Question | null>(null);
 
-  // Bumped on every open so the dialog remounts with fresh field state.
   const [formKey, setFormKey] = useState(0);
 
   const [importOpen, setImportOpen] = useState(false);
@@ -87,7 +91,7 @@ export function QuestionBankView({
   );
 
   const byCategory = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizedQuery.toLowerCase();
 
     const filtered = questions.filter(
       (item) =>
@@ -117,7 +121,7 @@ export function QuestionBankView({
     return [...map.entries()].sort((a, b) =>
       a[0].localeCompare(b[0])
     );
-  }, [questions, query]);
+  }, [questions, normalizedQuery]);
 
   function toggleCat(cat: string) {
     setOpenCats((prev) => {
@@ -175,7 +179,6 @@ export function QuestionBankView({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      {/* Header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Question Bank</h1>
@@ -204,7 +207,6 @@ export function QuestionBankView({
         </div>
       </div>
 
-      {/* Bank selector */}
       {banks.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {banks.map((b) => (
@@ -230,7 +232,6 @@ export function QuestionBankView({
         </div>
       )}
 
-      {/* No banks */}
       {banks.length === 0 ? (
         <EmptyState
           icon={Library}
@@ -245,7 +246,6 @@ export function QuestionBankView({
         />
       ) : activeBank ? (
         <>
-          {/* Active bank header */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="font-medium">{activeBank.name}</h2>
@@ -289,7 +289,6 @@ export function QuestionBankView({
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative mb-3 max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
 
@@ -301,7 +300,6 @@ export function QuestionBankView({
             />
           </div>
 
-          {/* Questions */}
           {byCategory.length === 0 ? (
             <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
               {questions.length === 0
@@ -323,7 +321,10 @@ export function QuestionBankView({
                       className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent/40"
                     >
                       <span className="font-medium">
-                        {cat}
+                        <Highlight
+                          text={cat}
+                          query={normalizedQuery}
+                        />
                       </span>
 
                       <span className="flex items-center gap-2">
@@ -358,7 +359,10 @@ export function QuestionBankView({
                                 </div>
 
                                 <p className="mt-1.5 text-sm">
-                                  {q.question}
+                                  <Highlight
+                                    text={q.question}
+                                    query={normalizedQuery}
+                                  />
                                 </p>
 
                                 {q.answer_hints && (
@@ -403,7 +407,6 @@ export function QuestionBankView({
         </>
       ) : null}
 
-      {/* Question form dialog */}
       {activeBank && (
         <QuestionFormDialog
           key={formKey}
@@ -415,13 +418,11 @@ export function QuestionBankView({
         />
       )}
 
-      {/* Import dialog */}
       <ImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
       />
 
-      {/* Delete bank dialog */}
       <AlertDialog
         open={!!deleteBank}
         onOpenChange={(open) => {
@@ -455,7 +456,6 @@ export function QuestionBankView({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete question dialog */}
       <AlertDialog
         open={!!deleteQ}
         onOpenChange={(open) => {
