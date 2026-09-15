@@ -3,10 +3,20 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Users, Link2, X } from "lucide-react";
+
 import type { CandidateSummary } from "@/lib/pipeline";
 import type { Role } from "@/lib/types";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   StatusBadge,
   ScoreChip,
@@ -46,7 +56,7 @@ export function CandidatesView({
       }
 
       return next;
-    }); 
+    });
   }
 
   const filtered = useMemo(() => {
@@ -73,7 +83,7 @@ export function CandidatesView({
         (c.applied_role ?? "").toLowerCase().includes(q) ||
         (c.current_company ?? "").toLowerCase().includes(q)
       );
-    }); 
+    });
   }, [candidates, query, filter, currentUserId]);
 
   const filters: { key: Filter; label: string }[] = [
@@ -149,11 +159,11 @@ export function CandidatesView({
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="w-10 px-3 py-2.5">
+        <div className="rounded-xl border bg-card">
+          <Table>
+            <TableHeader className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <TableRow>
+                <TableHead className="w-10 px-3 py-2.5">
                   <input
                     type="checkbox"
                     className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
@@ -176,124 +186,124 @@ export function CandidatesView({
                       });
                     }}
                   />
-                </th>
+                </TableHead>
 
-                <th className="px-4 py-2.5 font-medium">
+                <TableHead className="px-4 py-2.5 font-medium">
                   Candidate
-                </th>
+                </TableHead>
 
-                <th className="px-4 py-2.5 font-medium">
+                <TableHead className="px-4 py-2.5 font-medium">
                   Rounds
-                </th>
+                </TableHead>
 
-                <th className="px-4 py-2.5 font-medium">
+                <TableHead className="px-4 py-2.5 font-medium">
                   Status
-                </th>
+                </TableHead>
 
-                <th className="hidden px-4 py-2.5 font-medium md:table-cell">
+                <TableHead className="px-4 py-2.5 font-medium">
                   Added
-                </th>
-              </tr>
-            </thead>
-<tbody className="divide-y">
-  {filtered.map((c) => (
-    <tr
-      key={c.id}
-      className={cn(
-        "group hover:bg-accent/30",
-        selected.has(c.id) && "bg-primary/5"
-      )}
-    >
-      {/* Checkbox */}
-      <td className="px-3 py-3">
-        <input
-          type="checkbox"
-          className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
-          aria-label={`Select ${c.name}`}
-          checked={selected.has(c.id)}
-          onChange={() => toggle(c.id)}
-        />
-      </td>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
 
+            <TableBody>
+              {filtered.map((c) => (
+                <TableRow
+                  key={c.id}
+                  className={cn(
+                    "group hover:bg-accent/30",
+                    selected.has(c.id) && "bg-primary/5"
+                  )}
+                >
+                  {/* Checkbox */}
+                  <TableCell className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+                      aria-label={`Select ${c.name}`}
+                      checked={selected.has(c.id)}
+                      onChange={() => toggle(c.id)}
+                    />
+                  </TableCell>
 
-      {/* Candidate Name + Avatar */}
-      <td className="px-4 py-3">
-        <Link
-          href={`/candidates/${c.id}`}
-          className="flex items-center gap-3"
-        >
-          <CandidateAvatar
-            name={c.name}
-            size="md"
-          />
+                  {/* Candidate Name + Avatar */}
+                  <TableCell className="px-4 py-3">
+                    <Link
+                      href={`/candidates/${c.id}`}
+                      className="flex items-center gap-3"
+                    >
+                      <CandidateAvatar
+                        name={c.name}
+                        size="md"
+                      />
 
-          <div>
-            <div className="font-medium group-hover:underline">
-              {c.name}
-            </div>
+                      <div>
+                        <div className="font-medium group-hover:underline">
+                          {c.name}
+                        </div>
 
-            <div className="text-xs text-muted-foreground">
-              {[c.applied_role, c.current_company]
-                .filter(Boolean)
-                .join(" · ") || "—"}
+                        <div className="text-xs text-muted-foreground">
+                          {[c.applied_role, c.current_company]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
 
-              {c.experience_years != null &&
-                ` · ${c.experience_years} yr`}
-            </div>
-          </div>
-        </Link>
-      </td>
+                          {c.experience_years != null &&
+                            ` · ${c.experience_years} yr`}
+                        </div>
+                      </div>
+                    </Link>
+                  </TableCell>
 
+                  {/* Interview Rounds */}
+                  <TableCell className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {c.rounds.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          No rounds yet
+                        </span>
+                      ) : (
+                        c.rounds.map((r) => (
+                          <span
+                            key={r.id}
+                            className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
+                            title={`${r.title} · ${
+                              r.interviewer_name ?? "Unassigned"
+                            }`}
+                          >
+                            <span className="font-medium">
+                              R{r.round_number}
+                            </span>
 
-      {/* Interview Rounds */}
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {c.rounds.length === 0 ? (
-            <span className="text-xs text-muted-foreground">
-              No rounds yet
-            </span>
-          ) : (
-            c.rounds.map((r) => (
-              <span
-                key={r.id}
-                className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
-                title={`${r.title} · ${r.interviewer_name ?? "Unassigned"}`}
-              >
-                <span className="font-medium">
-                  R{r.round_number}
-                </span>
+                            {r.status === "completed" ? (
+                              <ScoreChip score={r.question_avg} />
+                            ) : (
+                              <RoundStatusBadge status={r.status} />
+                            )}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </TableCell>
 
-                {r.status === "completed" ? (
-                  <ScoreChip score={r.question_avg} />
-                ) : (
-                  <RoundStatusBadge status={r.status} />
-                )}
-              </span>
-            ))
-          )}
-        </div>
-      </td>
+                  {/* Status */}
+                  <TableCell className="px-4 py-3">
+                    <StatusBadge status={c.status} />
+                  </TableCell>
 
-      {/* Status */}
-      <td className="px-4 py-3">
-        <StatusBadge status={c.status} />
-      </td>
+                  {/* Created Date */}
+                  <TableCell className="px-4 py-3 text-muted-foreground">
+                    <RelativeTime value={c.created_at} />
 
-      
-{/* Created Date */}
-<td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-  <RelativeTime value={c.created_at} />
-
-  {c.created_by_name && (
-    <div className="text-xs">
-      by {c.created_by_name}
-    </div>
-  )}
-</td>
-    </tr>
-  ))}
-</tbody>
-          </table>
+                    {c.created_by_name && (
+                      <div className="text-xs">
+                        by {c.created_by_name}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 

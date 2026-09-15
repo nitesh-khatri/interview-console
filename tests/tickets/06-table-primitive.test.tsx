@@ -15,7 +15,7 @@ import { renderWithProviders as render } from "../fixtures/render";
  */
 let CandidatesView: typeof import("@/components/candidates/candidates-view").CandidatesView;
 
-describe.skip("ticket 6 — table primitive", () => {
+describe("ticket 6 — table primitive", () => {
   beforeAll(async () => {
     ({ CandidatesView } = await import("@/components/candidates/candidates-view"));
   });

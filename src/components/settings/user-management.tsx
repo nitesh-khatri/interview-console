@@ -31,6 +31,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 /** The user's Type (department), deriving a sensible value for legacy rows. */
 function typeOf(u: User): UserType {
@@ -57,7 +65,10 @@ export function UserManagement({
 
   async function patchUser(id: number, body: Record<string, unknown>) {
     try {
-      await api(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+      await api(`/api/users/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
       router.refresh();
     } catch (err) {
       toast.error((err as Error).message);
@@ -78,89 +89,103 @@ export function UserManagement({
           Add user
         </Button>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="py-2 pr-4 font-medium">Name</th>
-              <th className="py-2 pr-4 font-medium">Access</th>
-              <th className="py-2 pr-4 font-medium">Type</th>
-              <th className="py-2 pr-4 font-medium">Active</th>
-              <th className="py-2 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {users.map((u) => {
-              const isSelf = u.id === currentUserId;
-              const access = accessOf(u.role);
-              const type = typeOf(u);
-              return (
-                <tr key={u.id}>
-                  <td className="py-2.5 pr-4">
-                    <div className="font-medium">{u.display_name}</div>
-                    <div className="text-xs text-muted-foreground">@{u.username}</div>
-                  </td>
-                  <td className="py-2.5 pr-4">
-                    <Select
-                      value={access}
-                      onValueChange={(v) => {
-                        const { role, department } = toRoleAndDept(v as Access, type);
-                        patchUser(u.id, { role, department });
-                      }}
-                      disabled={isSelf}
-                    >
-                      <SelectTrigger className="h-8 w-28">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="py-2.5 pr-4">
-                    <Select
-                      value={type}
-                      onValueChange={(v) => {
-                        const { role, department } = toRoleAndDept(access, v as UserType);
-                        patchUser(u.id, { role, department });
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {USER_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="py-2.5 pr-4">
-                    <Switch
-                      checked={u.active === 1}
-                      disabled={isSelf}
-                      onCheckedChange={(c) => patchUser(u.id, { active: c })}
-                    />
-                  </td>
-                  <td className="py-2.5 text-right">
-                    <Button variant="outline" size="sm" onClick={() => setResetUser(u)}>
-                      <KeyRound className="h-3.5 w-3.5" />
-                      Reset password
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Table>
+        <TableHeader className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <TableRow>
+            <TableHead className="py-2 pr-4 font-medium">Name</TableHead>
+            <TableHead className="py-2 pr-4 font-medium">Access</TableHead>
+            <TableHead className="py-2 pr-4 font-medium">Type</TableHead>
+            <TableHead className="py-2 pr-4 font-medium">Active</TableHead>
+            <TableHead className="py-2 font-medium text-right">
+              Actions
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {users.map((u) => {
+            const isSelf = u.id === currentUserId;
+            const access = accessOf(u.role);
+            const type = typeOf(u);
+            return (
+              <TableRow key={u.id}>
+                <TableCell className="py-2.5 pr-4">
+                  <div className="font-medium">{u.display_name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    @{u.username}
+                  </div>
+                </TableCell>
+                <TableCell className="py-2.5 pr-4">
+                  <Select
+                    value={access}
+                    onValueChange={(v) => {
+                      const { role, department } = toRoleAndDept(
+                        v as Access,
+                        type,
+                      );
+                      patchUser(u.id, { role, department });
+                    }}
+                    disabled={isSelf}
+                  >
+                    <SelectTrigger className="h-8 w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell className="py-2.5 pr-4">
+                  <Select
+                    value={type}
+                    onValueChange={(v) => {
+                      const { role, department } = toRoleAndDept(
+                        access,
+                        v as UserType,
+                      );
+                      patchUser(u.id, { role, department });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell className="py-2.5 pr-4">
+                  <Switch
+                    checked={u.active === 1}
+                    disabled={isSelf}
+                    onCheckedChange={(c) => patchUser(u.id, { active: c })}
+                  />
+                </TableCell>
+                <TableCell className="py-2.5 text-right">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setResetUser(u)}
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Reset password
+                  </Button>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
 
       <AddUserDialog open={addOpen} onOpenChange={setAddOpen} />
-      <ResetPasswordDialog user={resetUser} onClose={() => setResetUser(null)} />
+      <ResetPasswordDialog
+        user={resetUser}
+        onClose={() => setResetUser(null)}
+      />
     </section>
   );
 }
@@ -220,7 +245,13 @@ function AddUserDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="u-password">Temporary password</Label>
-            <Input id="u-password" name="password" type="text" minLength={6} required />
+            <Input
+              id="u-password"
+              name="password"
+              type="text"
+              minLength={6}
+              required
+            />
             <p className="text-xs text-muted-foreground">
               The user is prompted to change this on first sign-in.
             </p>
@@ -228,7 +259,10 @@ function AddUserDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Access</Label>
-              <Select value={access} onValueChange={(v) => setAccess(v as Access)}>
+              <Select
+                value={access}
+                onValueChange={(v) => setAccess(v as Access)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -240,7 +274,10 @@ function AddUserDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Type</Label>
-              <Select value={type} onValueChange={(v) => setType(v as UserType)}>
+              <Select
+                value={type}
+                onValueChange={(v) => setType(v as UserType)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -305,13 +342,21 @@ function ResetPasswordDialog({
         <form onSubmit={submit} className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Set a new temporary password for{" "}
-            <span className="font-medium text-foreground">{user?.display_name}</span>.
-            They&apos;ll be asked to change it at next sign-in, and current sessions
-            are signed out.
+            <span className="font-medium text-foreground">
+              {user?.display_name}
+            </span>
+            . They&apos;ll be asked to change it at next sign-in, and current
+            sessions are signed out.
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="r-password">New password</Label>
-            <Input id="r-password" name="new_password" type="text" minLength={6} required />
+            <Input
+              id="r-password"
+              name="new_password"
+              type="text"
+              minLength={6}
+              required
+            />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading}>
