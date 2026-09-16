@@ -26,7 +26,11 @@ import type {
 } from "@/lib/types";
 import type { RoundSummary } from "@/lib/pipeline";
 import { api } from "@/lib/client";
-import { useDebouncedSave } from "@/lib/use-debounced-save";
+import {
+  combineSaveStatus,
+  useDebouncedSave,
+} from "@/lib/use-debounced-save";
+import { SaveStatusIndicator } from "@/components/console/save-status";
 import { useResizable } from "@/lib/use-resizable";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,7 +49,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RoundStatusBadge, DifficultyBadge, TypeBadge } from "@/components/badges";
+import {
+  RoundStatusBadge,
+  DifficultyBadge,
+  TypeBadge,
+} from "@/components/badges";
 import { ScoreButtons } from "@/components/console/score-buttons";
 import { QuestionBankPanel } from "@/components/console/question-bank-panel";
 import { ScoringPanel } from "@/components/console/scoring-panel";
@@ -111,40 +119,65 @@ export function InterviewConsole({
   const scored = asked.filter((a) => a.score !== null);
   const avgScore =
     scored.length > 0
-      ? (scored.reduce((s, a) => s + (a.score ?? 0), 0) / scored.length).toFixed(1)
+      ? (
+          scored.reduce((s, a) => s + (a.score ?? 0), 0) / scored.length
+        ).toFixed(1)
       : null;
 
-  // ---- persistence helpers ----
-  // Each returns its promise so `flush()` can await pending saves before we
-  // complete the round (which makes it read-only server-side).
-  const { trigger: saveQuestionField, flush: flushQuestionFields } =
-    useDebouncedSave((key, value) => {
-      const rqId = Number(key.split(":")[1]);
-      return api(`/api/rounds/${round.id}/questions/${rqId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ notes: value }),
-      }).catch((e) => toast.error((e as Error).message));
+  const {
+    trigger: saveQuestionField,
+    flush: flushQuestionFields,
+    retry: retryQuestionSave,
+    status: questionSaveStatus,
+  } = useDebouncedSave((key, value) => {
+    const rqId = Number(key.split(":")[1]);
+
+    return api(`/api/rounds/${round.id}/questions/${rqId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ notes: value }),
     });
+  });
 
-  const { trigger: saveOverallNotes, flush: flushOverallNotes } =
-    useDebouncedSave((_key, value) => {
-      return api(`/api/rounds/${round.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ overall_notes: value }),
-      }).catch((e) => toast.error((e as Error).message));
+  const {
+    trigger: saveOverallNotes,
+    flush: flushOverallNotes,
+    retry: retryOverallSave,
+    status: overallSaveStatus,
+  } = useDebouncedSave((_key, value) => {
+    return api(`/api/rounds/${round.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ overall_notes: value }),
     });
+  });
 
-  const { trigger: saveRatingNote, flush: flushRatingNotes } = useDebouncedSave(
-    (key, value) => {
-      const param = key.slice("rating:".length);
-      return api(`/api/rounds/${round.id}/ratings`, {
-        method: "PUT",
-        body: JSON.stringify({ param_name: param, note: value }),
-      }).catch((e) => toast.error((e as Error).message));
-    }
-  );
+  const {
+    trigger: saveRatingNote,
+    flush: flushRatingNotes,
+    retry: retryRatingSave,
+    status: ratingSaveStatus,
+  } = useDebouncedSave((key, value) => {
+    const param = key.slice("rating:".length);
 
-  /** Persist any in-flight debounced edits before a status change. */
+    return api(`/api/rounds/${round.id}/ratings`, {
+      method: "PUT",
+      body: JSON.stringify({ param_name: param, note: value }),
+    });
+  });
+
+  const saveStatus = combineSaveStatus([
+    questionSaveStatus,
+    overallSaveStatus,
+    ratingSaveStatus,
+  ]);
+
+  const retrySave = useCallback(async () => {
+    await Promise.all([
+      retryQuestionSave(),
+      retryOverallSave(),
+      retryRatingSave(),
+    ]);
+  }, [retryQuestionSave, retryOverallSave, retryRatingSave]);
+
   async function flushPendingSaves() {
     await Promise.all([
       flushQuestionFields(),
@@ -153,7 +186,6 @@ export function InterviewConsole({
     ]);
   }
 
-  // ---- question actions ----
   const addQuestion = useCallback(
     async (q: BankQuestion) => {
       try {
@@ -238,12 +270,11 @@ export function InterviewConsole({
 
   async function removeQuestion(rqId: number) {
     setAsked((prev) => prev.filter((a) => a.id !== rqId));
-    api(`/api/rounds/${round.id}/questions/${rqId}`, { method: "DELETE" }).catch(
-      (e) => toast.error((e as Error).message)
-    );
+    api(`/api/rounds/${round.id}/questions/${rqId}`, {
+      method: "DELETE",
+    }).catch((e) => toast.error((e as Error).message));
   }
 
-  // ---- rating actions ----
   function setRatingScore(param: string, score: number | null) {
     setRatings((prev) =>
       prev.map((r) => (r.param_name === param ? { ...r, score } : r))
@@ -304,7 +335,6 @@ export function InterviewConsole({
     saveOverallNotes("notes", v);
   }
 
-  // ---- status actions ----
   async function startRound() {
     try {
       await api(`/api/rounds/${round.id}`, {
@@ -320,8 +350,6 @@ export function InterviewConsole({
 
   async function completeRound() {
     try {
-      // Persist any just-typed notes first — completing makes the round
-      // read-only server-side, so a pending save would be rejected and lost.
       await flushPendingSaves();
       await api(`/api/rounds/${round.id}`, {
         method: "PATCH",
@@ -343,7 +371,6 @@ export function InterviewConsole({
       });
       setStatus("in_progress");
       toast.success("Round reopened — you can edit it again");
-      // Refresh so the server re-renders the console in editable mode.
       router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -352,7 +379,6 @@ export function InterviewConsole({
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
-      {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b bg-card px-4 py-2.5">
         <Link
           href={`/candidates/${candidate.id}`}
@@ -361,7 +387,9 @@ export function InterviewConsole({
           <ArrowLeft className="h-4 w-4" />
           Back
         </Link>
+
         <div className="h-5 w-px bg-border" />
+
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate font-semibold">{candidate.name}</span>
@@ -373,36 +401,50 @@ export function InterviewConsole({
               </span>
             )}
           </div>
+
           <div className="text-xs text-muted-foreground">
             {round.title} · {candidate.applied_role ?? "—"}
           </div>
         </div>
+
         <div className="ml-auto flex items-center gap-3">
+          {!readOnly && (
+            <SaveStatusIndicator
+              status={saveStatus}
+              onRetry={retrySave}
+            />
+          )}
+
           <RoundTimer status={status} startedAt={startedAt} />
+
           <div className="text-sm">
             <span className="text-muted-foreground">Avg</span>{" "}
             <span className="font-semibold tabular-nums">
               {avgScore ?? "—"}
             </span>
           </div>
+
           {!readOnly && status === "pending" && (
             <Button size="sm" onClick={startRound}>
               <Play className="h-4 w-4" />
               Start round
             </Button>
           )}
+
           {!readOnly && status === "in_progress" && (
             <Button size="sm" onClick={completeRound}>
               <CheckCircle2 className="h-4 w-4" />
               Complete
             </Button>
           )}
+
           {status === "completed" && canReopen && (
             <Button size="sm" variant="outline" onClick={reopenRound}>
               <RotateCcw className="h-4 w-4" />
               Reopen
             </Button>
           )}
+
           {canAdvance && (
             <AssignRoundDialog
               candidateId={candidate.id}
@@ -421,9 +463,7 @@ export function InterviewConsole({
         </div>
       </div>
 
-      {/* Body: split layout */}
       <div className="flex min-h-0 flex-1">
-        {/* Left: question bank (resizable) */}
         <div
           className="hidden shrink-0 border-r md:block"
           style={{ width: panelWidth }}
@@ -437,7 +477,7 @@ export function InterviewConsole({
             readOnly={readOnly}
           />
         </div>
-        {/* Drag handle — thin visual line with a wide invisible hit area */}
+
         <div
           onMouseDown={onResize}
           className="group relative hidden w-1.5 shrink-0 cursor-col-resize md:block"
@@ -456,13 +496,13 @@ export function InterviewConsole({
           />
         </div>
 
-        {/* Center: asked questions */}
         <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">
                 Questions asked ({asked.length})
               </h2>
+
               {!readOnly && (
                 <Button
                   size="sm"
@@ -499,7 +539,6 @@ export function InterviewConsole({
           </div>
         </div>
 
-        {/* Right edge rail */}
         <div className="flex w-12 shrink-0 flex-col items-center gap-2 border-l bg-card py-3">
           <RailButton
             label="Scoring"
@@ -508,6 +547,7 @@ export function InterviewConsole({
           >
             <ClipboardList className="h-5 w-5" />
           </RailButton>
+
           <RailButton
             label="Candidate"
             active={panel === "info"}
@@ -518,7 +558,6 @@ export function InterviewConsole({
         </div>
       </div>
 
-      {/* Slide-in panels */}
       <Sheet open={panel !== null} onOpenChange={(o) => !o && setPanel(null)}>
         <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md">
           <SheetHeader className="border-b">
@@ -526,6 +565,7 @@ export function InterviewConsole({
               {panel === "scoring" ? "Scoring" : "Candidate info"}
             </SheetTitle>
           </SheetHeader>
+
           {panel === "scoring" && (
             <ScoringPanel
               ratings={ratings}
@@ -540,6 +580,7 @@ export function InterviewConsole({
               readOnly={readOnly}
             />
           )}
+
           {panel === "info" && (
             <CandidateInfoPanel
               candidate={candidate}
@@ -549,12 +590,12 @@ export function InterviewConsole({
         </SheetContent>
       </Sheet>
 
-      {/* Ad-hoc question dialog */}
       <Dialog open={adhocOpen} onOpenChange={setAdhocOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add an ad-hoc question</DialogTitle>
           </DialogHeader>
+
           <div className="space-y-1.5">
             <Label htmlFor="adhoc">Question</Label>
             <Textarea
@@ -566,6 +607,7 @@ export function InterviewConsole({
               autoFocus
             />
           </div>
+
           <DialogFooter>
             <Button onClick={addAdhoc} disabled={!adhocText.trim()}>
               Add question
@@ -593,31 +635,38 @@ function AskedQuestionCard({
   onRemove: () => void;
 }) {
   const [notes, setNotes] = useState(item.notes ?? "");
+
   return (
     <div className="rounded-xl border bg-card p-3">
       <div className="flex items-start gap-2">
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
           {index}
         </span>
+
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             {item.difficulty && (
               <DifficultyBadge difficulty={item.difficulty as never} />
             )}
+
             {item.qtype && <TypeBadge qtype={item.qtype} />}
+
             {item.category && (
               <span className="text-[10px] text-muted-foreground">
                 {item.category}
               </span>
             )}
+
             {!item.question_id && (
               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 ad-hoc
               </span>
             )}
           </div>
+
           <p className="mt-1.5 text-sm">{item.question_text}</p>
         </div>
+
         {!readOnly && (
           <button
             onClick={onRemove}
@@ -628,9 +677,15 @@ function AskedQuestionCard({
           </button>
         )}
       </div>
+
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pl-8">
-        <ScoreButtons value={item.score} onChange={onScore} disabled={readOnly} />
+        <ScoreButtons
+          value={item.score}
+          onChange={onScore}
+          disabled={readOnly}
+        />
       </div>
+
       <div className="mt-2 pl-8">
         <Input
           value={notes}
@@ -688,6 +743,7 @@ function RoundTimer({
   useEffect(() => {
     if (status === "in_progress" && startedAt) {
       intervalRef.current = setInterval(() => setNow(Date.now()), 1000);
+
       return () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
       };
@@ -699,9 +755,11 @@ function RoundTimer({
   const start = new Date(
     startedAt.includes("T") ? startedAt : startedAt.replace(" ", "T") + "Z"
   ).getTime();
+
   const secs = Math.max(0, Math.floor((now - start) / 1000));
   const mm = String(Math.floor(secs / 60)).padStart(2, "0");
   const ss = String(secs % 60).padStart(2, "0");
+
   return (
     <span className="hidden font-mono text-sm tabular-nums text-muted-foreground sm:inline">
       {mm}:{ss}

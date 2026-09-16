@@ -23,7 +23,7 @@ let useDebouncedSave: Mod["useDebouncedSave"];
 let combineSaveStatus: Mod["combineSaveStatus"];
 let SaveStatusIndicator: typeof import("@/components/console/save-status").SaveStatusIndicator;
 
-describe.skip("ticket 12 — autosave indicator", () => {
+describe("ticket 12 — autosave indicator", () => {
   beforeAll(async () => {
     ({ useDebouncedSave, combineSaveStatus } = await import(
       "@/lib/use-debounced-save"
